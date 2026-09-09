@@ -69,6 +69,7 @@ class DemoTrace(BaseModel):
     # Kept temporarily for clients written before the status split. It is the
     # MCP envelope status, identical to ``call_status``.
     status: str
+    query_normalized: bool = False
     retrieval: DemoRetrieval | None = None
 
 
@@ -151,6 +152,7 @@ def _trace(trace: ToolTrace, *, minimum_score: float) -> DemoTrace:
         call_status=trace.status,
         business_status=business_status,
         status=trace.status,
+        query_normalized=trace.query_normalized,
         retrieval=_retrieval_observability(trace, minimum_score),
     )
 

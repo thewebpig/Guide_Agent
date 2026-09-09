@@ -57,7 +57,7 @@ uv run uvicorn guide_agent.demo_api:app --host 127.0.0.1 --port 8765
 
 响应包含 `answer`、`sources`、`traces`、`api_format` 与 `elapsed_ms`。Swagger UI 位于 `/docs`，完整设计与演示话术见 [架构说明](docs/architecture.md) 和 [三分钟演示](docs/demo_3_minutes.md)。
 
-`search_knowledge` 按 Markdown 标题和段落建立语义块；Trace 会显示最高检索分数、当前阈值和是否接受，但不会回传整段检索文档。默认阈值为 `0.50`，仅针对本仓库的演示场景校准；接入真实场馆资料前应使用代表性问题重新评测和设定阈值。
+`search_knowledge` 按 Markdown 标题和段落建立语义块，并由程序强制使用用户的原始问题，避免模型扩写场馆名后造成虚高分。Trace 会显示最高检索分数、当前阈值和是否接受，但不会回传整段检索文档。默认阈值为 `0.50`，仅针对本仓库的演示场景校准；接入真实场馆资料前应使用代表性问题重新评测和设定阈值。
 
 ## 验证
 
@@ -73,7 +73,7 @@ uv run python -c "from guide_agent.demo_api import app; print(app.title)"
 ```text
 src/guide_agent/   Agent、MCP、业务工具和 FastAPI
 scenes/demo/       完全虚构的演示场景与知识文档
-tests/             104 个离线测试
+tests/             100+ 个离线测试
 scripts/           PowerShell 启动脚本和 CLI
 docs/              架构、限制与演示说明
 ```

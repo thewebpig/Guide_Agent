@@ -90,7 +90,7 @@ function show(d) {
           ? make(
               "p",
               "retrieval",
-              `检索观测：最高分 ${t.retrieval.top_score === null ? "无" : t.retrieval.top_score.toFixed(3)} · 阈值 ${t.retrieval.minimum_score.toFixed(2)} · ${t.retrieval.accepted ? "接受" : "拒绝"}`,
+              `检索观测：最高分 ${t.retrieval.top_score === null ? "无" : t.retrieval.top_score.toFixed(3)} · 阈值 ${t.retrieval.minimum_score.toFixed(2)} · ${t.retrieval.accepted ? "接受" : "拒绝"}${t.query_normalized ? " · 已纠正模型改写" : ""}`,
             )
           : document.createDocumentFragment(),
         make("p", "", "参数"),

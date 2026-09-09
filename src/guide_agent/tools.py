@@ -61,8 +61,8 @@ class SearchKnowledgeArguments(BaseModel):
     query: str = Field(
         min_length=1,
         description=(
-            "保留用户完整原问题及场馆语境的检索语句；不得只提取孤立关键词。"
-            "例如保留“体验中心常规开放时间是什么？”，不要缩写为“常规开放时间”。"
+            "逐字复制用户完整原问题；不得添加场馆名称或其他上下文，"
+            "不得摘要、改写或只提取孤立关键词。"
         ),
     )
     top_k: int = Field(
@@ -124,8 +124,8 @@ SEARCH_KNOWLEDGE_TOOL = ToolDefinition(
     name="search_knowledge",
     description=(
         "从访客指南中检索开放时间、访问规则、"
-        "地点服务和安全要求等知识证据。query 必须保留用户完整问题和场馆语境，"
-        "不得压缩成孤立关键词。"
+        "地点服务和安全要求等知识证据。query 必须逐字复制用户完整问题，"
+        "不得添加场馆语境、改写或压缩成关键词。"
     ),
     arguments_model=SearchKnowledgeArguments,
 )

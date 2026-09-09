@@ -18,8 +18,8 @@ def test_scene_context_keeps_poi_tool_arguments_to_exact_ids() -> None:
     assert "绝不能填写名称、别名、冒号后的说明、方括号注释" in context
 
 
-def test_scene_context_requires_complete_knowledge_query() -> None:
+def test_scene_context_requires_verbatim_knowledge_query() -> None:
     context = _build_scene_context(load_scene(DEFAULT_SCENE_PATH))
 
-    assert "query 必须保留用户完整原问题和场馆语境" in context
-    assert "不能把“体验中心常规开放时间是什么？”缩成“常规开放时间”" in context
+    assert "query 必须逐字复制用户完整原问题" in context
+    assert "不得添加场馆名称或其他上下文" in context

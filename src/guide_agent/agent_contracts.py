@@ -19,6 +19,10 @@ class ToolTrace:
     result: dict[str, object]
     status: str
     business_status: str | None = None
+    # ``search_knowledge`` always receives the original user question.  This
+    # flag makes that safety normalization visible without retaining a model's
+    # misleading rewritten query in the trace.
+    query_normalized: bool = False
 
 
 @dataclass(frozen=True)

@@ -72,12 +72,14 @@ class _MCPMiddleware(AgentMiddleware):
         traces: list[ToolTrace],
         max_steps: int,
         timeout: float,
+        user_message: str,
     ) -> None:
         super().__init__()
         self._client = client
         self._traces = traces
         self._max_steps = max_steps
         self._tool_timeout_seconds = timeout
+        self._user_message = user_message.strip()
         self._tool_rounds = 0
         self._lock = asyncio.Lock()
         self.aborted = False
@@ -101,6 +103,21 @@ class _MCPMiddleware(AgentMiddleware):
             call = request.tool_call
             name = call.get("name")
             raw = call.get("args", {})
+            effective_args = raw
+            query_normalized = False
+            # A model may keywordize or invent venue context for a retrieval
+            # query.  Retrieval is only allowed to represent this request, so
+            # replace that one field before both validation and MCP execution.
+            # Other arguments (including top_k) remain model-controlled and
+            # are still strictly validated below.
+            if name == "search_knowledge" and isinstance(raw, dict):
+                effective_args = {**raw, "query": self._user_message}
+                query_normalized = raw.get("query") != self._user_message
+            effective_request = (
+                request.override(tool_call={**call, "args": effective_args})
+                if effective_args is not raw
+                else request
+            )
             result: dict[str, object]
             if self.aborted:
                 result = {
@@ -123,9 +140,9 @@ class _MCPMiddleware(AgentMiddleware):
                     item for item in TOOL_DEFINITIONS if item.name == name
                 )
                 try:
-                    definition.arguments_model.model_validate(raw)
+                    definition.arguments_model.model_validate(effective_args)
                     message = await asyncio.wait_for(
-                        handler(request), self._tool_timeout_seconds
+                        handler(effective_request), self._tool_timeout_seconds
                     )
                     artifact = getattr(message, "artifact", None)
                     parsed = (
@@ -190,10 +207,11 @@ class _MCPMiddleware(AgentMiddleware):
             self._traces.append(
                 ToolTrace(
                     name if isinstance(name, str) else str(name),
-                    raw if isinstance(raw, dict) else {},
+                    effective_args if isinstance(effective_args, dict) else {},
                     result,
                     trace_status,
                     business_status,
+                    query_normalized,
                 )
             )
             return ToolMessage(
@@ -280,7 +298,11 @@ class LangChainGuideAgent:
     async def arun(self, user_message: str) -> AgentResult:
         traces: list[ToolTrace] = []
         middleware = _MCPMiddleware(
-            self._mcp_client, traces, self._max_steps, self._tool_timeout_seconds
+            self._mcp_client,
+            traces,
+            self._max_steps,
+            self._tool_timeout_seconds,
+            user_message,
         )
         try:
             tools = await self._mcp_client.tools()

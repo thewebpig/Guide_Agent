@@ -58,7 +58,7 @@ def _build_scene_context(scene: Scene) -> str:
         "工具参数硬性规则：lookup_poi 的 poi_id，以及 plan_route 的 start_id、end_id，"
         "必须且只能填写上面清单中的一个精确纯 ID（例如 entrance、ai_lab）。"
         "绝不能填写名称、别名、冒号后的说明、方括号注释，或把它们拼接进 ID。\n"
-        "知识检索规则：调用 search_knowledge 时，query 必须保留用户完整原问题和场馆语境，"
-        "不要缩写为孤立关键词（例如不能把“体验中心常规开放时间是什么？”缩成“常规开放时间”）。\n"
+        "知识检索规则：调用 search_knowledge 时，query 必须逐字复制用户完整原问题；"
+        "不得添加场馆名称或其他上下文，不得摘要、改写或缩写为关键词。\n"
         "禁止猜测 POI ID、路线距离、开放时间和设施属性；不确定时调用工具或请求澄清。"
     )
