@@ -1,10 +1,12 @@
 """知识文档加载与文本切分。
 
 本模块负责RAG流程中最靠前的两步：先按照Scene中的source_docs读取原始文档，
-再把完整文档切成适合后续向量化和检索的小片段。这里暂时只做按字符数切分，
-还不涉及Embedding、向量数据库或大模型。
+再把完整文档切成适合后续向量化和检索的小片段。Markdown 文档会按标题和
+段落切分，使每条证据保持一个明确的语义边界；普通文本和超长段落仍使用有界
+的固定宽度切分。
 """
 
+import re
 from pathlib import Path
 
 from pydantic import BaseModel, Field
@@ -108,7 +110,7 @@ def split_documents(
     chunk_size: int = 500,
     overlap: int = 100,
 ) -> list[DocumentChunk]:
-    """按照字符数量把完整文档切分为带重叠的片段。
+    """按 Markdown 语义边界或固定宽度切分文档。
 
     参数列表中的*表示chunk_size与overlap只能按关键字传入，例如
     split_documents(docs, chunk_size=500, overlap=100)，避免两个整数写反。
@@ -132,51 +134,113 @@ def split_documents(
             "overlap must be smaller than chunk_size"
         )
 
-    # 每次起点前进“片段大小-重叠量”。例如4和1得到步长3：
-    # 第1块从0开始，第2块从3开始，因此两个片段重叠1个字符。
-    step = chunk_size - overlap
     chunks: list[DocumentChunk] = []
 
     for document in documents:
-        # 每份文档都从第0个字符开始，片段编号也从1重新计数。
-        # chunk_id还包含source，因此不同文档的0001不会发生冲突。
-        start = 0
-        chunk_number = 1
+        # Markdown 的标题层级和段落是作者明确写出的语义边界。只有真的存在
+        # ATX 标题时才使用这条路径；文件扩展名为 .md 但没有标题的文本仍按
+        # 固定宽度处理，避免意外改变旧资料的切分语义。
+        semantic_units = _markdown_paragraph_units(document.text)
+        unit_texts = (
+            _expand_markdown_units(semantic_units, chunk_size, overlap)
+            if semantic_units is not None
+            else _fixed_width_units(document.text, chunk_size, overlap)
+        )
 
-        while start < len(document.text):
-            # 最后一块可能短于chunk_size；min防止end超过文本实际长度。
-            end = min(
-                start + chunk_size,
-                len(document.text),
+        for chunk_number, chunk_text in enumerate(unit_texts, start=1):
+            chunks.append(
+                DocumentChunk(
+                    chunk_id=f"{document.source}::chunk-{chunk_number:04d}",
+                    text=chunk_text,
+                    source=document.source,
+                )
             )
 
-            # Python切片左闭右开：包含start位置，不包含end位置。
-            # 再清理片段首尾空白，避免生成仅包含边界空白的检索内容。
-            chunk_text = document.text[
-                start:end
-            ].strip()
+    return chunks
 
-            # 某个切片若清理后为空，就不加入结果，也不消耗片段编号。
-            if chunk_text:
-                chunks.append(
-                    DocumentChunk(
-                        # :04d把编号补齐为4位，如0001，使ID稳定且便于排序。
-                        chunk_id=(
-                            f"{document.source}"
-                            f"::chunk-{chunk_number:04d}"
-                        ),
-                        text=chunk_text,
-                        source=document.source,
-                    )
-                )
-                chunk_number += 1
 
-            # end到达全文末尾时已经处理完最后一块。立即结束可避免再生成
-            # 一个只由前一块重叠区域构成的多余尾块。
-            if end == len(document.text):
-                break
+_MARKDOWN_HEADING = re.compile(r"^(#{1,6})\s+(.+?)\s*$")
 
-            # 未到末尾则按固定步长移动起点，形成相邻片段的字符重叠。
-            start += step
 
+def _markdown_paragraph_units(text: str) -> list[tuple[str, str]] | None:
+    """Return ``(heading context, paragraph)`` units for headed Markdown.
+
+    The context is included in the embedded text, so a paragraph such as an
+    opening-hours rule retains both the venue title and its ``##`` section.
+    Returning ``None`` deliberately chooses the legacy fixed-width fallback.
+    """
+
+    lines = text.splitlines()
+    if not any(_MARKDOWN_HEADING.match(line) for line in lines):
+        return None
+
+    headings: list[str] = []
+    body: list[str] = []
+    units: list[tuple[str, str]] = []
+
+    def flush_body() -> None:
+        nonlocal body
+        content = "\n".join(body).strip()
+        body = []
+        if not content or not headings:
+            return
+        context = "\n".join(headings)
+        # Blank lines mark paragraphs in the small source documents.  Keep
+        # wrapped lines inside a paragraph intact rather than flattening them.
+        for paragraph in re.split(r"\n\s*\n+", content):
+            cleaned = paragraph.strip()
+            if cleaned:
+                units.append((context, cleaned))
+
+    for line in lines:
+        match = _MARKDOWN_HEADING.match(line)
+        if match:
+            flush_body()
+            level = len(match.group(1))
+            heading = f"{'#' * level} {match.group(2).strip()}"
+            del headings[level - 1 :]
+            headings.append(heading)
+        else:
+            body.append(line)
+    flush_body()
+
+    return units or None
+
+
+def _expand_markdown_units(
+    units: list[tuple[str, str]], chunk_size: int, overlap: int
+) -> list[str]:
+    """Format semantic units and apply a bounded fallback to oversized text."""
+
+    chunks: list[str] = []
+    for context, paragraph in units:
+        prefix = f"{context}\n\n"
+        combined = f"{prefix}{paragraph}"
+        if len(combined) <= chunk_size:
+            chunks.append(combined)
+            continue
+
+        # A long paragraph must not create an unbounded embedding input. Keep
+        # the heading context on every fallback chunk, then window only body.
+        body_size = max(1, chunk_size - len(prefix))
+        for body_piece in _fixed_width_units(paragraph, body_size, overlap):
+            chunks.append(f"{prefix}{body_piece}")
+    return chunks
+
+
+def _fixed_width_units(text: str, chunk_size: int, overlap: int) -> list[str]:
+    """The bounded, overlapping fallback used for non-Markdown and long text."""
+
+    effective_overlap = min(overlap, chunk_size - 1)
+    step = chunk_size - effective_overlap
+    chunks: list[str] = []
+    start = 0
+    while start < len(text):
+        end = min(start + chunk_size, len(text))
+        chunk_text = text[start:end].strip()
+        if chunk_text:
+            chunks.append(chunk_text)
+        if end == len(text):
+            break
+        start += step
     return chunks

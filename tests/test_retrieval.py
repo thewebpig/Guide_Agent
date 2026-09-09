@@ -13,7 +13,7 @@ import numpy as np
 import pytest
 from numpy.typing import NDArray
 
-from guide_agent.documents import DocumentChunk
+from guide_agent.documents import DocumentChunk, load_documents, split_documents
 from guide_agent.retrieval import (
     KnowledgeIndex,
     build_knowledge_index,
@@ -22,6 +22,7 @@ from guide_agent.retrieval import (
     search_knowledge,
     KnowledgeSearchError,
 )
+from guide_agent.scene import load_scene
 
 # 测试路径从文件自身推导，不依赖pytest从哪个目录启动。
 PROJECT_ROOT = Path(__file__).parents[1]
@@ -284,13 +285,18 @@ def test_build_knowledge_index_rejects_invalid_embeddings(
 def test_build_scene_knowledge_index_rebuilds_demo() -> None:
     """真实场景配置和知识文档应能从头重建索引。"""
 
-    # chunk_size远大于当前指南，使真实文档稳定切成一块，只需提供一个假向量。
+    expected_chunks = split_documents(
+        load_documents(load_scene(DEMO_SCENE_PATH), DEMO_SCENE_PATH.parent),
+        chunk_size=10_000,
+        overlap=0,
+    )
     embedder = FakeEmbedder(
         [
             np.array(
                 [1.0, 0.0],
                 dtype=np.float32,
             )
+            for _ in expected_chunks
         ]
     )
 
@@ -302,26 +308,26 @@ def test_build_scene_knowledge_index_rebuilds_demo() -> None:
     )
 
     # 检查流水线最终索引、片段和注入的模型保持一致。
-    assert knowledge_index.index.ntotal == 1
-    assert len(knowledge_index.chunks) == 1
+    assert knowledge_index.index.ntotal == len(expected_chunks)
+    assert len(knowledge_index.chunks) == len(expected_chunks)
     assert knowledge_index.embedder is embedder
 
     # 固定真实来源的稳定ID、来源路径和关键正文，证明不是用假文档绕过加载。
-    chunk = knowledge_index.chunks[0]
+    chunk = next(
+        item
+        for item in knowledge_index.chunks
+        if "周二至周日9:30—17:30" in item.text
+    )
     assert (
         chunk.chunk_id
-        == "docs/visitor_guide.md::chunk-0001"
+        == "docs/visitor_guide.md::chunk-0009"
     )
     assert chunk.source == "docs/visitor_guide.md"
-    assert chunk.text.startswith(
-        "# 星河科技体验中心访客指南"
-    )
-    assert "人工智能实验室" in chunk.text
+    assert "## 开放与访问规则" in chunk.text
+    assert "场馆概览" not in chunk.text
 
     # 最终交给Embedding的文本就是加载、清理和切分后的真实chunk正文。
-    assert embedder.received_documents == [
-        chunk.text
-    ]
+    assert embedder.received_documents == [item.text for item in knowledge_index.chunks]
 
 
 def test_search_knowledge_returns_ranked_results() -> None:

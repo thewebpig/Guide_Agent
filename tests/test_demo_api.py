@@ -117,8 +117,8 @@ def test_chat_exposes_sanitized_retrieval_observability() -> None:
     trace = response.json()["traces"][0]
     assert trace["retrieval"] == {
         "top_score": 0.49915,
-        "minimum_score": 0.48,
-        "accepted": True,
+        "minimum_score": 0.50,
+        "accepted": False,
     }
     assert trace["result"]["data"] == [
         {"source": "visitor_guide.md", "chunk_id": "opening-hours", "score": 0.49915}

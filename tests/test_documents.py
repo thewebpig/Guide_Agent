@@ -219,6 +219,53 @@ def test_split_documents_creates_overlap_and_stable_ids() -> None:
     )
 
 
+def test_split_documents_keeps_markdown_sections_and_paragraphs_independent() -> None:
+    """Headed Markdown keeps context while avoiding cross-section evidence."""
+
+    document = SourceDocument(
+        source="guide.md",
+        text=(
+            "# 场馆指南\n\n"
+            "## 场馆概览\n\n"
+            "这里是概览。\n\n"
+            "## 开放与访问规则\n\n"
+            "常规开放时间为周二至周日9:30—17:30，16:30停止入场。\n\n"
+            "请从主入口完成安检。"
+        ),
+    )
+
+    chunks = split_documents([document], chunk_size=500, overlap=100)
+
+    assert [chunk.chunk_id for chunk in chunks] == [
+        "guide.md::chunk-0001",
+        "guide.md::chunk-0002",
+        "guide.md::chunk-0003",
+    ]
+    assert chunks[1].text == (
+        "# 场馆指南\n## 开放与访问规则\n\n"
+        "常规开放时间为周二至周日9:30—17:30，16:30停止入场。"
+    )
+    assert "这里是概览" not in chunks[1].text
+    assert chunks[1].source == "guide.md"
+
+
+def test_split_documents_uses_bounded_fallback_for_oversized_markdown_paragraph() -> None:
+    """A long paragraph remains bounded and keeps its heading context."""
+
+    document = SourceDocument(
+        source="guide.md",
+        text="# 指南\n\n## 规则\n\n" + "甲" * 30,
+    )
+
+    chunks = split_documents([document], chunk_size=20, overlap=5)
+
+    assert len(chunks) > 1
+    assert all("## 规则" in chunk.text for chunk in chunks)
+    # The heading itself can exceed a tiny synthetic chunk size, but each body
+    # window remains bounded rather than allowing a full oversized paragraph.
+    assert all(len(chunk.text) <= 20 for chunk in chunks)
+
+
 # 参数化把三种独立的非法边界生成三条测试，避免复制三份测试函数。
 @pytest.mark.parametrize(
     (

@@ -15,7 +15,7 @@ from guide_agent.agent_contracts import AgentResult, ToolTrace
 # This threshold is calibrated for the bundled synthetic demo scene.  It is
 # intentionally not presented as a universal RAG quality threshold: replace it
 # after evaluating a real venue's documents and representative questions.
-DEFAULT_DEMO_MINIMUM_SCORE = 0.48
+DEFAULT_DEMO_MINIMUM_SCORE = 0.50
 
 
 class AgentRunner(Protocol):
@@ -278,17 +278,38 @@ def _answer_from_knowledge(
             tools=tools,
         )
 
-    # 第一版直接返回排名最高的证据文本，避免模型在改写时
-    # 添加未出现于证据的事实；后续可增加“受约束摘要+事实校验”。
+    # 证据块会保留 Markdown 标题，帮助向量检索识别语境；用户回答不应把标题
+    # 和同一块中的无关段落整段倾倒出去。这里不做生成式改写，只从最高分证据
+    # 中抽取首个正文段落，因此每个字仍可回溯到本次检索证据。
     return TrustedAnswer(
         status="ok",
-        answer=evidence[0][0],
+        answer=_concise_evidence_text(evidence[0][0]),
         tools=tools,
         sources=tuple(
             source
             for _, source in evidence
         ),
     )
+
+
+def _concise_evidence_text(text: str) -> str:
+    """Return the first substantive paragraph from a semantic evidence chunk.
+
+    Markdown heading context belongs in the indexed evidence, but it is not a
+    user-facing answer. Paragraph-aware chunking makes the first body paragraph
+    a bounded, source-faithful extract rather than an arbitrary 500-character
+    slice. Plain-text chunks remain unchanged.
+    """
+
+    body_lines: list[str] = []
+    for line in text.splitlines():
+        if line.lstrip().startswith("#"):
+            continue
+        body_lines.append(line.strip())
+    body = "\n".join(body_lines).strip()
+    if not body:
+        return text.strip()
+    return body.split("\n\n", maxsplit=1)[0].strip()
 
 
 def build_trusted_answer(
