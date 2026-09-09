@@ -1,0 +1,112 @@
+{
+  "scene_id": "demo_tech_center",
+  "name": "星河科技体验中心",
+  "pois": [
+    {
+      "id": "entrance",
+      "name": "主入口",
+      "description": "体验中心的主要入口和安检区域。",
+      "aliases": ["入口", "大门"],
+      "tags": ["服务", "入口"],
+      "position": {
+        "x": 0.0,
+        "y": 0.0,
+        "floor": 1
+      }
+    },
+    {
+      "id": "robot",
+      "name": "接待机器人",
+      "description": "提供咨询和基础导览服务的机器人。",
+      "aliases": ["导览机器人", "接待助手"],
+      "tags": ["AI", "服务"],
+      "position": {
+        "x": 3.0,
+        "y": 0.0,
+        "floor": 1
+      }
+    },
+    {
+      "id": "exhibition",
+      "name": "智能科技展厅",
+      "description": "展示人工智能和智能设备的公共展厅。",
+      "aliases": ["科技展厅", "展厅"],
+      "tags": ["展览", "AI"],
+      "position": {
+        "x": 8.0,
+        "y": 2.0,
+        "floor": 1
+      }
+    },
+    {
+      "id": "ai_lab",
+      "name": "人工智能实验室",
+      "description": "用于开展人工智能应用研究的实验室。",
+      "aliases": ["AI实验室", "智能实验室"],
+      "tags": ["研究", "AI"],
+      "position": {
+        "x": 10.0,
+        "y": 7.0,
+        "floor": 2
+      }
+    },
+    {
+      "id": "cafe",
+      "name": "访客休息区",
+      "description": "为访客提供座椅和饮水服务的休息区域。",
+      "aliases": ["休息区", "咖啡区"],
+      "tags": ["休息", "服务"],
+      "position": {
+        "x": 4.0,
+        "y": 6.0,
+        "floor": 1
+      }
+    },
+    {
+      "id": "maintenance",
+      "name": "设备维护区",
+      "description": "暂不对访客开放的设备维护区域。",
+      "aliases": ["维护区"],
+      "tags": ["内部", "不可达"],
+      "position": {
+        "x": 20.0,
+        "y": 20.0,
+        "floor": 1
+      }
+    }
+  ],
+  "route_graph": {
+    "directed": false,
+    "edges": [
+      {
+        "from_id": "entrance",
+        "to_id": "robot",
+        "distance": 3.0
+      },
+      {
+        "from_id": "robot",
+        "to_id": "exhibition",
+        "distance": 6.0
+      },
+      {
+        "from_id": "exhibition",
+        "to_id": "ai_lab",
+        "distance": 5.0
+      },
+      {
+        "from_id": "exhibition",
+        "to_id": "cafe",
+        "distance": 4.0
+      },
+      {
+        "from_id": "cafe",
+        "to_id": "entrance",
+        "distance": 7.0
+      }
+    ]
+  },
+  "source_docs": [
+    "docs/visitor_guide.md"
+  ],
+  "system_prompt": "你是星河科技体验中心的导览助手，只能依据场景数据和检索到的资料回答问题。"
+}

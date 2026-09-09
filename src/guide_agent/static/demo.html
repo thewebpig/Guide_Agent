@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Guide Agent · LangChain + MCP</title>
+    <link rel="stylesheet" href="/static/demo.css" />
+  </head>
+  <body>
+    <main class="shell">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow">GUIDE AGENT</p>
+          <h1>导览问答演示</h1>
+        </div>
+        <div class="versions">
+          <span class="version active">LangChain Agent</span
+          ><span class="version active">MCP · stdio</span>
+        </div>
+      </header>
+      <section class="context">
+        <span class="status ready">LangChain + MCP</span
+        ><span id="format" class="status">读取 API 格式中…</span
+        ><span id="configStatus" class="status">正在读取本机配置…</span
+        ><span class="memory-note">单次问答 · 未启用连续对话记忆</span>
+      </section>
+      <section class="layout">
+        <section class="chat-card">
+          <div class="card-heading">
+            <div>
+              <p class="eyebrow">ASK</p>
+              <h2 id="sceneTitle">导览助手</h2>
+            </div>
+            <button id="clearButton" class="text-button" type="button" disabled>
+              清空记录
+            </button>
+          </div>
+          <div id="messages" class="messages" aria-live="polite"></div>
+          <div id="presets" class="presets"></div>
+          <form id="chatForm" class="composer">
+            <label class="sr-only" for="question">输入问题</label
+            ><textarea
+              id="question"
+              maxlength="1000"
+              rows="3"
+              placeholder="例如：从主入口到人工智能实验室怎么走？"
+              disabled
+            ></textarea>
+            <div class="composer-footer">
+              <span>最多 1000 个字符</span
+              ><button id="sendButton" type="submit" disabled>发送问题</button>
+            </div>
+          </form>
+        </section>
+        <aside class="trace-card">
+          <div class="card-heading">
+            <div>
+              <p class="eyebrow">RUN TRACE</p>
+              <h2>真实执行过程</h2>
+            </div>
+            <span class="native-tag">MCP</span>
+          </div>
+          <div id="tracePanel" class="trace-panel"></div>
+        </aside>
+      </section>
+    </main>
+    <script src="/static/demo.js"></script>
+  </body>
+</html>
