@@ -64,7 +64,7 @@ uv run pytest
 uv run python -c "from guide_agent.demo_api import app; print(app.title)"
 ```
 
-测试全部离线运行：覆盖场景解析、RAG、POI、Dijkstra 路线、工具 Schema、FastAPI、MCP stdio 工具发现，以及两种模型协议的真实 SDK 请求路径，不消耗 API 额度。
+测试不调用大模型 API：覆盖场景解析、RAG、POI、Dijkstra 路线、工具 Schema、FastAPI、MCP stdio 工具发现，以及两种模型协议的真实 SDK 请求路径，不消耗 API 额度。首次运行 RAG/MCP 测试时，FastEmbed 可能需要下载 Embedding 模型；缓存后可离线执行。
 
 ## 目录
 
