@@ -76,4 +76,4 @@ scripts/           PowerShell 启动脚本和 CLI
 docs/              架构、限制与演示说明
 ```
 
-
+这个仓库不会提交 `.env`、密钥、私有求职材料、历史评测输出或模型调用记录。项目采用 [MIT License](LICENSE)。
