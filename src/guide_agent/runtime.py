@@ -45,8 +45,18 @@ def resolve_scene_path(scene_path: str | Path | None = None) -> Path:
 
 
 def _build_scene_context(scene: Scene) -> str:
-    pois = ", ".join(f"{poi.id}:{poi.name}[{','.join(poi.aliases)}]" if poi.aliases else f"{poi.id}:{poi.name}" for poi in scene.pois)
+    poi_ids = ", ".join(poi.id for poi in scene.pois)
+    poi_labels = "; ".join(
+        f"{poi.id} = {poi.name}"
+        + (f"（别名：{', '.join(poi.aliases)}）" if poi.aliases else "")
+        for poi in scene.pois
+    )
     return (
-        f"场景系统提示：{scene.system_prompt}\n已知 POI ID/名称/别名：{pois}\n"
+        f"场景系统提示：{scene.system_prompt}\n"
+        f"POI 工具参数允许的纯 ID 清单：{poi_ids}\n"
+        f"名称和别名映射（只用于理解用户问题，不能原样作为工具参数）：{poi_labels}\n"
+        "工具参数硬性规则：lookup_poi 的 poi_id，以及 plan_route 的 start_id、end_id，"
+        "必须且只能填写上面清单中的一个精确纯 ID（例如 entrance、ai_lab）。"
+        "绝不能填写名称、别名、冒号后的说明、方括号注释，或把它们拼接进 ID。\n"
         "禁止猜测 POI ID、路线距离、开放时间和设施属性；不确定时调用工具或请求澄清。"
     )

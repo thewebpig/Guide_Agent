@@ -56,6 +56,10 @@ class DemoTrace(BaseModel):
     tool_name: str
     arguments: dict[str, object]
     result: object
+    call_status: str
+    business_status: str | None = None
+    # Kept temporarily for clients written before the status split. It is the
+    # MCP envelope status, identical to ``call_status``.
     status: str
 
 
@@ -88,10 +92,16 @@ def _trace(trace: ToolTrace) -> DemoTrace:
     result = {"status": trace.status}
     if isinstance(trace.result, dict) and "data" in trace.result:
         result["data"] = trace.result["data"]
+    business_status = trace.business_status
+    if business_status is None and isinstance(result.get("data"), dict):
+        nested_status = result["data"].get("status")
+        business_status = nested_status if isinstance(nested_status, str) else None
     return DemoTrace(
         tool_name=trace.tool_name,
         arguments=trace.arguments,
         result=result,
+        call_status=trace.status,
+        business_status=business_status,
         status=trace.status,
     )
 

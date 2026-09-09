@@ -181,12 +181,19 @@ class _MCPMiddleware(AgentMiddleware):
                     }
             status = result.get("status")
             trace_status = status if isinstance(status, str) else "invalid_result"
+            payload = result.get("data")
+            business_status = (
+                payload.get("status")
+                if isinstance(payload, dict) and isinstance(payload.get("status"), str)
+                else None
+            )
             self._traces.append(
                 ToolTrace(
                     name if isinstance(name, str) else str(name),
                     raw if isinstance(raw, dict) else {},
                     result,
                     trace_status,
+                    business_status,
                 )
             )
             return ToolMessage(

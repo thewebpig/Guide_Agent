@@ -292,6 +292,9 @@ pre {
   font-size: 12px;
   margin-left: 6px;
 }
+.trace-status.business-failed {
+  color: #b54708;
+}
 .sr-only {
   position: absolute;
   width: 1px;

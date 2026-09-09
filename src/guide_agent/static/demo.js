@@ -72,7 +72,18 @@ function show(d) {
     d.traces.forEach((t) => {
       const x = make("details", "trace"),
         s = make("summary", "", t.tool_name);
-      s.append(make("span", "trace-status", t.status));
+      const callStatus = t.call_status ?? t.status;
+      const businessStatus = t.business_status;
+      s.append(make("span", "trace-status", `调用：${callStatus}`));
+      if (businessStatus !== null && businessStatus !== undefined) {
+        s.append(
+          make(
+            "span",
+            `trace-status ${businessStatus === "ok" ? "ok" : "business-failed"}`,
+            `业务：${businessStatus}`,
+          ),
+        );
+      }
       x.append(
         s,
         make("p", "", "参数"),

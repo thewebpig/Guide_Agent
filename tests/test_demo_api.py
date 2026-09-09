@@ -1,6 +1,6 @@
 from fastapi.testclient import TestClient
 
-from guide_agent.agent_contracts import AgentResult
+from guide_agent.agent_contracts import AgentResult, ToolTrace
 from guide_agent.answering import ChatService
 from guide_agent.demo_api import create_demo_app
 
@@ -32,3 +32,45 @@ def test_chat_rejects_legacy_backend_selection() -> None:
     with TestClient(app) as client:
         response = client.post("/chat", json={"question": "你好", "backend": "native"})
     assert response.status_code == 422
+
+
+class BusinessFailureTraceAgent:
+    async def arun(self, message: str) -> AgentResult:
+        trace = ToolTrace(
+            tool_name="plan_route",
+            arguments={"start_id": "entrance:主入口[入口,大门]", "end_id": "ai_lab"},
+            result={
+                "status": "ok",
+                "tool_name": "plan_route",
+                "data": {
+                    "status": "invalid_input",
+                    "path": [],
+                    "distance": None,
+                },
+            },
+            status="ok",
+        )
+        return AgentResult(
+            "completed",
+            "路线：entrance -> ai_lab；总距离：14。",
+            (trace,),
+            None,
+            "response-1",
+        )
+
+    async def aclose(self) -> None: pass
+
+
+def test_chat_trace_separates_mcp_call_from_business_result() -> None:
+    app = create_demo_app(
+        service_factory=lambda: ChatService(BusinessFailureTraceAgent())
+    )
+    with TestClient(app) as client:
+        response = client.post("/chat", json={"question": "从主入口到实验室怎么走"})
+
+    assert response.status_code == 200
+    trace = response.json()["traces"][0]
+    assert trace["call_status"] == "ok"
+    assert trace["business_status"] == "invalid_input"
+    assert trace["status"] == "ok"  # Backward-compatible envelope status.
+    assert trace["result"]["data"]["status"] == "invalid_input"
