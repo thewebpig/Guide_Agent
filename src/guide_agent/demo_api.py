@@ -52,6 +52,14 @@ class DemoSource(BaseModel):
     score: float
 
 
+class DemoRetrieval(BaseModel):
+    """Retrieval observability without returning retrieved document text."""
+
+    top_score: float | None
+    minimum_score: float
+    accepted: bool
+
+
 class DemoTrace(BaseModel):
     tool_name: str
     arguments: dict[str, object]
@@ -61,6 +69,7 @@ class DemoTrace(BaseModel):
     # Kept temporarily for clients written before the status split. It is the
     # MCP envelope status, identical to ``call_status``.
     status: str
+    retrieval: DemoRetrieval | None = None
 
 
 class DemoResponse(BaseModel):
@@ -88,10 +97,49 @@ def _model_configured() -> bool:
     )
 
 
-def _trace(trace: ToolTrace) -> DemoTrace:
+def _retrieval_observability(
+    trace: ToolTrace, minimum_score: float
+) -> DemoRetrieval | None:
+    if trace.tool_name != "search_knowledge":
+        return None
+    payload = trace.result.get("data") if isinstance(trace.result, dict) else None
+    scores = (
+        [
+            float(item["score"])
+            for item in payload
+            if isinstance(item, dict)
+            and isinstance(item.get("score"), (int, float))
+            and not isinstance(item.get("score"), bool)
+        ]
+        if isinstance(payload, list)
+        else []
+    )
+    top_score = max(scores, default=None)
+    return DemoRetrieval(
+        top_score=top_score,
+        minimum_score=minimum_score,
+        accepted=top_score is not None and top_score >= minimum_score,
+    )
+
+
+def _trace(trace: ToolTrace, *, minimum_score: float) -> DemoTrace:
     result = {"status": trace.status}
     if isinstance(trace.result, dict) and "data" in trace.result:
-        result["data"] = trace.result["data"]
+        data = trace.result["data"]
+        # Search results may contain full document chunks.  The response has
+        # separately audited sources, so the trace only needs IDs and scores.
+        if trace.tool_name == "search_knowledge" and isinstance(data, list):
+            result["data"] = [
+                {
+                    key: item[key]
+                    for key in ("source", "chunk_id", "score")
+                    if key in item
+                }
+                for item in data
+                if isinstance(item, dict)
+            ]
+        else:
+            result["data"] = data
     business_status = trace.business_status
     if business_status is None and isinstance(result.get("data"), dict):
         nested_status = result["data"].get("status")
@@ -103,11 +151,17 @@ def _trace(trace: ToolTrace) -> DemoTrace:
         call_status=trace.status,
         business_status=business_status,
         status=trace.status,
+        retrieval=_retrieval_observability(trace, minimum_score),
     )
 
 
 def _payload(
-    request_id: str, answer: TrustedAnswer, result: AgentResult | None, elapsed: float
+    request_id: str,
+    answer: TrustedAnswer,
+    result: AgentResult | None,
+    elapsed: float,
+    *,
+    minimum_score: float,
 ) -> DemoResponse:
     return DemoResponse(
         request_id=request_id,
@@ -118,7 +172,9 @@ def _payload(
             DemoSource(source=item.source, chunk_id=item.chunk_id, score=item.score)
             for item in answer.sources
         ],
-        traces=[_trace(item) for item in result.tool_traces] if result else [],
+        traces=[_trace(item, minimum_score=minimum_score) for item in result.tool_traces]
+        if result
+        else [],
         api_format=_api_format(),
         elapsed_ms=round(elapsed, 2),
         error=answer.error,
@@ -195,7 +251,11 @@ def create_demo_app(
                 service.aanswer_with_trace(request.question), timeout=timeout_seconds
             )
             payload = _payload(
-                request_id, answer, result, (perf_counter() - started) * 1000
+                request_id,
+                answer,
+                result,
+                (perf_counter() - started) * 1000,
+                minimum_score=service.minimum_score,
             )
         except TimeoutError:
             response.status_code = 504

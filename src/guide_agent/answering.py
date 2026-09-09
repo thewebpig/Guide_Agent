@@ -12,6 +12,12 @@ from typing import Protocol
 from guide_agent.agent_contracts import AgentResult, ToolTrace
 
 
+# This threshold is calibrated for the bundled synthetic demo scene.  It is
+# intentionally not presented as a universal RAG quality threshold: replace it
+# after evaluating a real venue's documents and representative questions.
+DEFAULT_DEMO_MINIMUM_SCORE = 0.48
+
+
 class AgentRunner(Protocol):
     def run(self, user_message: str) -> AgentResult: ...
 
@@ -288,7 +294,7 @@ def _answer_from_knowledge(
 def build_trusted_answer(
     result: AgentResult,
     *,
-    minimum_score: float = 0.5,
+    minimum_score: float = DEFAULT_DEMO_MINIMUM_SCORE,
 ) -> TrustedAnswer:
     """根据Agent轨迹生成最终回答，不接受模型自报的引用。"""
 
@@ -356,7 +362,7 @@ class ChatService:
         self,
         agent: AgentRunner,
         *,
-        minimum_score: float = 0.5,
+        minimum_score: float = DEFAULT_DEMO_MINIMUM_SCORE,
     ) -> None:
         if not 0.0 <= minimum_score <= 1.0:
             raise ValueError(
@@ -364,6 +370,12 @@ class ChatService:
             )
         self._agent = agent
         self._minimum_score = minimum_score
+
+    @property
+    def minimum_score(self) -> float:
+        """The retrieval acceptance threshold used for this service."""
+
+        return self._minimum_score
 
     def answer(self, question: str) -> TrustedAnswer:
         """执行一次完整请求并收敛为稳定回答。"""

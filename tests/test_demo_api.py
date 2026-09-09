@@ -74,3 +74,53 @@ def test_chat_trace_separates_mcp_call_from_business_result() -> None:
     assert trace["business_status"] == "invalid_input"
     assert trace["status"] == "ok"  # Backward-compatible envelope status.
     assert trace["result"]["data"]["status"] == "invalid_input"
+
+
+class KnowledgeTraceAgent:
+    async def arun(self, message: str) -> AgentResult:
+        return AgentResult(
+            "completed",
+            "ignored by trusted-answer layer",
+            (
+                ToolTrace(
+                    tool_name="search_knowledge",
+                    arguments={"query": "体验中心常规开放时间是什么？", "top_k": 5},
+                    result={
+                        "status": "ok",
+                        "tool_name": "search_knowledge",
+                        "data": [
+                            {
+                                "source": "visitor_guide.md",
+                                "chunk_id": "opening-hours",
+                                "text": "This full document text must not enter the trace.",
+                                "score": 0.499150,
+                            }
+                        ],
+                        "error": None,
+                    },
+                    status="ok",
+                ),
+            ),
+            None,
+            "response-1",
+        )
+
+    async def aclose(self) -> None: pass
+
+
+def test_chat_exposes_sanitized_retrieval_observability() -> None:
+    app = create_demo_app(service_factory=lambda: ChatService(KnowledgeTraceAgent()))
+    with TestClient(app) as client:
+        response = client.post("/chat", json={"question": "开放时间是什么？"})
+
+    assert response.status_code == 200
+    trace = response.json()["traces"][0]
+    assert trace["retrieval"] == {
+        "top_score": 0.49915,
+        "minimum_score": 0.48,
+        "accepted": True,
+    }
+    assert trace["result"]["data"] == [
+        {"source": "visitor_guide.md", "chunk_id": "opening-hours", "score": 0.49915}
+    ]
+    assert "This full document text" not in str(trace)

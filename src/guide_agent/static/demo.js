@@ -86,6 +86,13 @@ function show(d) {
       }
       x.append(
         s,
+        t.retrieval
+          ? make(
+              "p",
+              "retrieval",
+              `检索观测：最高分 ${t.retrieval.top_score === null ? "无" : t.retrieval.top_score.toFixed(3)} · 阈值 ${t.retrieval.minimum_score.toFixed(2)} · ${t.retrieval.accepted ? "接受" : "拒绝"}`,
+            )
+          : document.createDocumentFragment(),
         make("p", "", "参数"),
         make("pre", "", JSON.stringify(t.arguments, null, 2)),
         make("p", "", "结果"),

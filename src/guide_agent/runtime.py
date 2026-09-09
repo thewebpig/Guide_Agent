@@ -3,7 +3,7 @@
 import os
 from pathlib import Path
 
-from guide_agent.answering import ChatService
+from guide_agent.answering import ChatService, DEFAULT_DEMO_MINIMUM_SCORE
 from guide_agent.documents import DocumentLoadError
 from guide_agent.langchain_agent import LangChainGuideAgent
 from guide_agent.mcp_client import MCPToolClient
@@ -33,7 +33,7 @@ def build_default_chat_service(scene_path: str | Path | None = None) -> ChatServ
             MCPToolClient(resolved),
             scene_context=_build_scene_context(scene),
         )
-        return ChatService(agent, minimum_score=0.5)
+        return ChatService(agent, minimum_score=DEFAULT_DEMO_MINIMUM_SCORE)
     except (ModelConfigurationError, SceneLoadError, DocumentLoadError, OSError) as error:
         raise RuntimeBuildError("failed to initialize LangChain + MCP runtime") from error
 
@@ -58,5 +58,7 @@ def _build_scene_context(scene: Scene) -> str:
         "工具参数硬性规则：lookup_poi 的 poi_id，以及 plan_route 的 start_id、end_id，"
         "必须且只能填写上面清单中的一个精确纯 ID（例如 entrance、ai_lab）。"
         "绝不能填写名称、别名、冒号后的说明、方括号注释，或把它们拼接进 ID。\n"
+        "知识检索规则：调用 search_knowledge 时，query 必须保留用户完整原问题和场馆语境，"
+        "不要缩写为孤立关键词（例如不能把“体验中心常规开放时间是什么？”缩成“常规开放时间”）。\n"
         "禁止猜测 POI ID、路线距离、开放时间和设施属性；不确定时调用工具或请求澄清。"
     )
