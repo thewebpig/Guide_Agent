@@ -109,6 +109,19 @@ def test_route_intent_not_found_cannot_be_overridden_by_later_rag_hit() -> None:
     assert "第二学术报告厅" not in answer.answer
 
 
+def test_route_request_never_uses_knowledge_only_trace_as_route_answer() -> None:
+    result = _knowledge_result(0.8)
+
+    answer = build_trusted_answer(
+        result,
+        question="我在一号报告厅，帮我去找任老师。",
+    )
+
+    assert answer.status == "route_not_planned"
+    assert "可验证的地点或路线结果" in answer.answer
+    assert "9:30-17:30" not in answer.answer
+
+
 def test_route_not_found_survives_agent_step_limit() -> None:
     lookup = ToolTrace(
         tool_name="lookup_poi",

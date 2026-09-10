@@ -90,6 +90,9 @@ def _build_scene_context(scene: Scene) -> str:
         "用户没有说明起点时，默认从 main_entrance 出发。\n"
         "知识检索规则：调用 search_knowledge 时，query 必须逐字复制用户完整原问题；"
         "不得添加场馆名称或其他上下文，不得摘要、改写或缩写为关键词。\n"
+        "路线工具选择规则：用户说‘怎么走’‘带我去’‘去找老师’等表达时，"
+        "只使用 lookup_poi 和 plan_route，不得调用 search_knowledge；"
+        "‘去找老师’表示前往该教师公开且可核实的办公室。\n"
         "禁止猜测 POI ID、路线距离、开放时间和设施属性；不确定时调用工具或请求澄清。"
         "路线权重和坐标是仿真数据，不得称为实测米数。"
     )

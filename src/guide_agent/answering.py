@@ -569,6 +569,11 @@ def build_trusted_answer(
                 answer="当前场景中未取得可验证的地点或路线结果，请确认地点名称，或重新描述起点和终点。",
                 tools=tools,
             )
+        return TrustedAnswer(
+            status="route_not_planned",
+            answer="本次没有取得可验证的地点或路线结果，请确认地点名称，或重新描述起点和终点。",
+            tools=tools,
+        )
 
     if person_research_only:
         for trace in reversed(result.tool_traces):
@@ -609,7 +614,18 @@ def build_trusted_answer(
 
 
 def _is_route_request(question: str) -> bool:
-    markers = ("带我", "怎么走", "怎么去", "路线", "导航", "前往", "去往", "我要去", "我想去")
+    markers = (
+        "带我",
+        "怎么走",
+        "怎么去",
+        "路线",
+        "导航",
+        "前往",
+        "去往",
+        "去找",
+        "我要去",
+        "我想去",
+    )
     return any(marker in question for marker in markers)
 
 
