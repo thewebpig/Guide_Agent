@@ -220,6 +220,9 @@ def _answer_from_poi(
     name = poi.get("name")
     description = poi.get("description")
     position = poi.get("position")
+    entity_type = poi.get("entity_type", "place")
+    navigation_status = poi.get("navigation_status", "navigable")
+    public_info = poi.get("public_info")
 
     if not isinstance(name, str) or not isinstance(description, str):
         return TrustedAnswer(
@@ -227,6 +230,34 @@ def _answer_from_poi(
             answer="地点工具未返回可用结果。",
             tools=tools,
             error="tool_error",
+        )
+
+    if navigation_status == "location_unverified":
+        return TrustedAnswer(
+            status="location_unverified",
+            answer="目前公开资料中没有可核实的具体办公室房间号，因此暂时无法规划路线。请以学院最新信息或现场指引为准。",
+            tools=tools,
+        )
+
+    if entity_type == "person":
+        office_text = ""
+        if isinstance(public_info, dict):
+            office = public_info.get("office")
+            verification = public_info.get("office_verification")
+            if verification == "unverified":
+                office_text = "目前公开资料中没有可核实的具体办公室房间号，请以学院最新信息或现场指引为准。"
+            elif isinstance(office, str) and office.strip():
+                office_text = f"公开办公地点：{office.strip()}。"
+        # Person profile coordinates are modeling aids, not verified rooms.
+        return TrustedAnswer(
+            status=(
+                "location_unverified"
+                if isinstance(public_info, dict)
+                and public_info.get("office_verification") == "unverified"
+                else "ok"
+            ),
+            answer=f"{name}。{description}{office_text}",
+            tools=tools,
         )
 
     floor_text = ""
@@ -341,6 +372,7 @@ def build_trusted_answer(
     result: AgentResult,
     *,
     minimum_score: float = DEFAULT_DEMO_MINIMUM_SCORE,
+    question: str | None = None,
 ) -> TrustedAnswer:
     """根据Agent轨迹生成最终回答，不接受模型自报的引用。"""
 
@@ -380,6 +412,43 @@ def build_trusted_answer(
             answer=result.answer,
         )
 
+    if question and _is_route_request(question):
+        route_traces = [
+            trace for trace in result.tool_traces if trace.tool_name == "plan_route"
+        ]
+        if route_traces:
+            return _answer_from_route(route_traces[-1], tools)
+
+        lookup_traces = [
+            trace for trace in result.tool_traces if trace.tool_name == "lookup_poi"
+        ]
+        for trace in lookup_traces:
+            payload = _tool_payload(trace)
+            if isinstance(payload, dict) and payload.get("status") == "not_found":
+                return TrustedAnswer(
+                    status="not_found",
+                    answer="当前场景数据中没有找到对应的可导航地点，因此暂时无法规划路线。",
+                    tools=tools,
+                )
+        for trace in lookup_traces:
+            payload = _tool_payload(trace)
+            poi = payload.get("poi") if isinstance(payload, dict) else None
+            navigation_status = poi.get("navigation_status") if isinstance(poi, dict) else None
+            if navigation_status in {"restricted", "location_unverified", "not_navigable"}:
+                if navigation_status == "restricted":
+                    return TrustedAnswer(
+                        status="destination_restricted",
+                        answer="该区域属于内部科研与办公区域，不能默认引导访客进入。如有访问授权，请按照现场工作人员指引前往。",
+                        tools=tools,
+                    )
+                return _answer_from_poi(trace, tools)
+        if lookup_traces:
+            return TrustedAnswer(
+                status="route_not_planned",
+                answer="当前场景中未取得可验证的地点或路线结果，请确认地点名称，或重新描述起点和终点。",
+                tools=tools,
+            )
+
     last_trace = result.tool_traces[-1]
 
     if last_trace.tool_name == "plan_route":
@@ -399,6 +468,11 @@ def build_trusted_answer(
         tools=tools,
         error="unknown_tool",
     )
+
+
+def _is_route_request(question: str) -> bool:
+    markers = ("带我", "怎么走", "怎么去", "路线", "导航", "前往", "去往", "我要去", "我想去")
+    return any(marker in question for marker in markers)
 
 
 class ChatService:
@@ -442,6 +516,7 @@ class ChatService:
         return build_trusted_answer(
             result,
             minimum_score=self._minimum_score,
+            question=question,
         ), result
 
     async def aanswer(self, question: str) -> TrustedAnswer:
@@ -455,7 +530,11 @@ class ChatService:
             result = await arun(question)
         else:
             result = await asyncio.to_thread(self._agent.run, question)
-        return build_trusted_answer(result, minimum_score=self._minimum_score), result
+        return build_trusted_answer(
+            result,
+            minimum_score=self._minimum_score,
+            question=question,
+        ), result
 
     async def aanswer_with_context(
         self,
@@ -479,7 +558,11 @@ class ChatService:
                 history=history,
                 current_location=current_location,
             )
-        return build_trusted_answer(result, minimum_score=self._minimum_score), result
+        return build_trusted_answer(
+            result,
+            minimum_score=self._minimum_score,
+            question=question,
+        ), result
 
     async def aclose(self) -> None:
         close = getattr(self._agent, "aclose", None)
