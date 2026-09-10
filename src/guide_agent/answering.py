@@ -217,6 +217,7 @@ def _answer_from_poi(
     tools: tuple[str, ...],
     *,
     office_location_only: bool = False,
+    person_profile_only: bool = False,
 ) -> TrustedAnswer:
     payload = _tool_payload(trace)
 
@@ -268,6 +269,12 @@ def _answer_from_poi(
         )
 
     if entity_type == "person":
+        if person_profile_only:
+            return TrustedAnswer(
+                status="ok",
+                answer=f"{name}。{description}",
+                tools=tools,
+            )
         office_text = ""
         if isinstance(public_info, dict):
             office = public_info.get("office")
@@ -508,6 +515,9 @@ def build_trusted_answer(
     office_location_only = bool(
         question and _is_office_location_request(question, history)
     )
+    person_research_only = bool(
+        question and _is_person_research_request(question)
+    )
 
     if question and _is_route_request(question):
         route_traces = [
@@ -545,6 +555,19 @@ def build_trusted_answer(
                 answer="当前场景中未取得可验证的地点或路线结果，请确认地点名称，或重新描述起点和终点。",
                 tools=tools,
             )
+
+    if person_research_only:
+        for trace in reversed(result.tool_traces):
+            if trace.tool_name != "lookup_poi":
+                continue
+            payload = _tool_payload(trace)
+            poi = payload.get("poi") if isinstance(payload, dict) else None
+            if isinstance(poi, dict) and poi.get("entity_type") == "person":
+                return _answer_from_poi(
+                    trace,
+                    tools,
+                    person_profile_only=True,
+                )
 
     last_trace = result.tool_traces[-1]
 
@@ -604,6 +627,11 @@ def _is_office_location_request(
             and any(marker in content for marker in location_markers)
         )
     return False
+
+
+def _is_person_research_request(question: str) -> bool:
+    markers = ("研究", "研究方向", "研究领域", "专业方向", "擅长", "科研方向")
+    return any(marker in question for marker in markers)
 
 
 class ChatService:

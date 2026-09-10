@@ -363,3 +363,63 @@ def test_model_only_internal_control_disclosure_is_rejected() -> None:
     assert answer.status == "unsafe_response"
     assert "系统提示" not in answer.answer
     assert "location_unverified" not in answer.answer
+
+
+def test_research_question_prefers_person_profile_over_later_office_node() -> None:
+    profile = ToolTrace(
+        tool_name="lookup_poi",
+        arguments={"poi_id": "ren_minglun_profile"},
+        result={
+            "status": "ok",
+            "tool_name": "lookup_poi",
+            "data": {
+                "status": "ok",
+                "poi": {
+                    "name": "任明仑教授",
+                    "description": "主要研究智能协同决策、人工智能与机器人和智能制造。",
+                    "position": {"floor": 11},
+                    "entity_type": "person",
+                    "navigation_status": "not_navigable",
+                    "public_info": {
+                        "office": "管理学院1108",
+                        "office_verification": "official_faculty_page",
+                    },
+                },
+            },
+            "error": None,
+        },
+        status="ok",
+    )
+    office = ToolTrace(
+        tool_name="lookup_poi",
+        arguments={"poi_id": "ren_minglun_office_1108"},
+        result={
+            "status": "ok",
+            "tool_name": "lookup_poi",
+            "data": {
+                "status": "ok",
+                "poi": {
+                    "name": "任明仑教授办公室（1108）",
+                    "description": "办公室地点说明。",
+                    "position": {"floor": 11},
+                    "entity_type": "place",
+                    "navigation_status": "navigable",
+                    "public_info": {},
+                },
+            },
+            "error": None,
+        },
+        status="ok",
+    )
+    result = AgentResult("completed", "ignored", (profile, office), None, "id")
+
+    answer = build_trusted_answer(
+        result,
+        question="任明仑教授主要研究什么？",
+    )
+
+    assert answer.status == "ok"
+    assert "智能协同决策" in answer.answer
+    assert "人工智能与机器人" in answer.answer
+    assert "办公室" not in answer.answer
+    assert "1108" not in answer.answer
