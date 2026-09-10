@@ -451,10 +451,25 @@ def build_trusted_answer(
             "minimum_score must be between 0 and 1"
         )
 
-    if result.status != "completed":
-        return _safe_agent_failure(result)
-
     tools = _tool_names(result.tool_traces)
+
+    if result.status != "completed":
+        # A model can continue reasoning until the step cap even after a tool
+        # has conclusively established that a requested destination does not
+        # exist. Preserve that verified business result instead of exposing an
+        # internal orchestration limit to the visitor.
+        if question and _is_route_request(question):
+            for trace in result.tool_traces:
+                if trace.status != "ok" or trace.tool_name != "lookup_poi":
+                    continue
+                payload = _tool_payload(trace)
+                if isinstance(payload, dict) and payload.get("status") == "not_found":
+                    return TrustedAnswer(
+                        status="not_found",
+                        answer="当前场景数据中没有找到对应的可导航地点，因此暂时无法规划路线。",
+                        tools=tools,
+                    )
+        return _safe_agent_failure(result)
 
     # 只要某次Tool外层执行失败，就不用后续模型文本伪装成成功。
     for trace in result.tool_traces:

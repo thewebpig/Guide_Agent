@@ -109,6 +109,37 @@ def test_route_intent_not_found_cannot_be_overridden_by_later_rag_hit() -> None:
     assert "第二学术报告厅" not in answer.answer
 
 
+def test_route_not_found_survives_agent_step_limit() -> None:
+    lookup = ToolTrace(
+        tool_name="lookup_poi",
+        arguments={"poi_id": "hall_4"},
+        result={
+            "status": "ok",
+            "tool_name": "lookup_poi",
+            "data": {"status": "not_found", "poi": None},
+            "error": None,
+        },
+        status="ok",
+        business_status="not_found",
+    )
+    result = AgentResult(
+        "max_steps_exceeded",
+        None,
+        (_knowledge_result(0.8).tool_traces[0], lookup),
+        "maximum tool steps exceeded",
+        None,
+    )
+
+    answer = build_trusted_answer(
+        result,
+        question="从主入口到第四学术报告厅怎么走？",
+    )
+
+    assert answer.status == "not_found"
+    assert answer.answer == "当前场景数据中没有找到对应的可导航地点，因此暂时无法规划路线。"
+    assert "步骤" not in answer.answer
+
+
 def test_route_intent_prefers_unverified_location_over_person_profile() -> None:
     unverified = ToolTrace(
         tool_name="lookup_poi",
