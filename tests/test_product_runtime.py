@@ -68,6 +68,43 @@ def test_http_rejects_unverified_or_non_spatial_current_location() -> None:
     assert response.json()["status"] == "invalid_location"
 
 
+def test_http_rejects_unknown_explicit_route_origin_without_calling_model() -> None:
+    agent = ContextAgent()
+    app = create_demo_app(service_factory=lambda: ChatService(agent))
+    with TestClient(app) as client:
+        response = client.post(
+            "/chat",
+            json={
+                "question": "从食堂去王刚教授办公室怎么走？",
+                "session_id": "session123",
+                "current_location": "main_entrance",
+            },
+        )
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "invalid_start_location"
+    assert "食堂" in response.json()["answer"]
+    assert "主入口" not in response.json()["answer"]
+    assert agent.calls == []
+
+
+def test_http_accepts_known_alias_as_explicit_route_origin() -> None:
+    agent = ContextAgent()
+    app = create_demo_app(service_factory=lambda: ChatService(agent))
+    with TestClient(app) as client:
+        response = client.post(
+            "/chat",
+            json={
+                "question": "我在一号报告厅，帮我去找任老师。",
+                "session_id": "session123",
+                "current_location": "main_entrance",
+            },
+        )
+
+    assert response.status_code == 200
+    assert agent.calls[0][0] == "我在一号报告厅，帮我去找任老师。"
+
+
 def test_readiness_fails_closed_without_server_secret(monkeypatch, tmp_path) -> None:
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     monkeypatch.setattr(

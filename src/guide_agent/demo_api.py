@@ -3,6 +3,7 @@
 import asyncio
 import logging
 import os
+import re
 from collections.abc import Callable
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -35,6 +36,41 @@ PRESETS = [
     "从主入口带我去王刚老师办公室。",
     "杨善林院士的办公室在哪里？",
 ]
+
+
+def _normalized_location_label(value: str) -> str:
+    normalized = re.sub(r"[\s，,。！？!?（）()]", "", value)
+    return normalized.replace("老师", "").replace("教授", "")
+
+
+def _explicit_route_origin(question: str) -> str | None:
+    """Extract an origin that the visitor explicitly stated in this turn."""
+
+    patterns = (
+        r"我(?:现在)?在(.+?)[，,]",
+        r"从(.+?)(?:怎么)?(?:带我)?(?:到|去|前往)",
+    )
+    for pattern in patterns:
+        match = re.search(pattern, question)
+        if not match:
+            continue
+        origin = match.group(1).strip(" ，,。！？!?")
+        if origin and origin not in {"这里", "当前位置", "这儿"}:
+            return origin
+    return None
+
+
+def _has_navigable_location(origin: str, pois: list[object]) -> bool:
+    expected = _normalized_location_label(origin)
+    for poi in pois:
+        if getattr(poi, "entity_type", None) != "place":
+            continue
+        if getattr(poi, "navigation_status", None) != "navigable":
+            continue
+        labels = [getattr(poi, "name", ""), *getattr(poi, "aliases", [])]
+        if any(_normalized_location_label(label) == expected for label in labels):
+            return True
+    return False
 
 
 class DemoRequest(BaseModel):
@@ -360,6 +396,17 @@ def create_demo_app(
                         (perf_counter() - started) * 1000,
                         api_format=_api_format(product),
                     )
+            explicit_origin = _explicit_route_origin(request.question)
+            if explicit_origin and not _has_navigable_location(explicit_origin, scene.pois):
+                return _error(
+                    request_id,
+                    session_id,
+                    current_location,
+                    "invalid_start_location",
+                    f"当前场景中没有找到“{explicit_origin}”对应的可导航起点，请重新选择或说明起点。",
+                    (perf_counter() - started) * 1000,
+                    api_format=_api_format(product),
+                )
             history, current_location = await sessions.context(session_id, current_location)
             async with asyncio.timeout(request_timeout):
                 async with gate.slot():
