@@ -144,7 +144,6 @@ async function init() {
     const response = await fetch("/demo/config");
     if (!response.ok) throw Error();
     state.config = await response.json();
-    $("sceneTitle").textContent = state.config.scene.name;
     $("routeNotice").textContent = state.config.scene.route_notice;
     const status = $("configStatus");
     status.textContent = state.config.model_configured ? "服务已就绪" : "等待部署人员配置模型密钥";
