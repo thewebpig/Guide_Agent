@@ -476,6 +476,20 @@ def build_trusted_answer(
                         answer="当前场景数据中没有找到对应的可导航地点，因此暂时无法规划路线。",
                         tools=tools,
                     )
+        if result.status == "max_steps_exceeded":
+            knowledge_traces = [
+                trace
+                for trace in result.tool_traces
+                if trace.status == "ok" and trace.tool_name == "search_knowledge"
+            ]
+            if knowledge_traces:
+                knowledge_answer = _answer_from_knowledge(
+                    knowledge_traces[-1],
+                    tools,
+                    minimum_score=minimum_score,
+                )
+                if knowledge_answer.status == "no_answer":
+                    return knowledge_answer
         return _safe_agent_failure(result)
 
     # 只要某次Tool外层执行失败，就不用后续模型文本伪装成成功。

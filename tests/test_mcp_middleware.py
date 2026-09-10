@@ -5,7 +5,11 @@ from typing import Any
 
 from langchain_core.messages import ToolMessage
 
-from guide_agent.langchain_agent import _MCPMiddleware, _requires_tool_grounding
+from guide_agent.langchain_agent import (
+    _DuplicateToolCall,
+    _MCPMiddleware,
+    _requires_tool_grounding,
+)
 
 
 @dataclass(frozen=True)
@@ -99,3 +103,38 @@ def test_only_social_turns_can_skip_grounding_tools() -> None:
     assert _requires_tool_grounding("谢谢！") is False
     assert _requires_tool_grounding("杨善林院士的办公室在哪里？") is True
     assert _requires_tool_grounding("从这里去306怎么走？") is True
+
+
+def test_duplicate_effective_tool_call_is_stopped_before_execution() -> None:
+    async def exercise() -> None:
+        traces = []
+        middleware = _MCPMiddleware(
+            UnusedClient(), traces, max_steps=4, timeout=1, user_message="访客可以把车停在哪里？"
+        )
+        request = FakeToolCallRequest(
+            {
+                "id": "call-1",
+                "name": "search_knowledge",
+                "args": {"query": "访客可以把车停在哪里？", "top_k": 5},
+            }
+        )
+        calls = 0
+
+        async def handler(effective_request: FakeToolCallRequest) -> ToolMessage:
+            nonlocal calls
+            calls += 1
+            return _ok_message(effective_request.tool_call)
+
+        await middleware.awrap_tool_call(request, handler)
+        duplicate = FakeToolCallRequest(
+            {**request.tool_call, "id": "call-2"}
+        )
+        with pytest.raises(_DuplicateToolCall):
+            await middleware.awrap_tool_call(duplicate, handler)
+
+        assert calls == 1
+        assert len(traces) == 1
+
+    import pytest
+
+    asyncio.run(exercise())

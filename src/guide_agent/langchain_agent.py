@@ -35,6 +35,10 @@ class _ToolExecutionStopped(RuntimeError):
     pass
 
 
+class _DuplicateToolCall(RuntimeError):
+    pass
+
+
 def _requires_tool_grounding(user_message: str) -> bool:
     """Venue requests require evidence; a small set of social turns does not."""
 
@@ -101,6 +105,7 @@ class _MCPMiddleware(AgentMiddleware):
         self._tool_timeout_seconds = timeout
         self._user_message = user_message.strip()
         self._tool_rounds = 0
+        self._seen_calls: set[str] = set()
         self._lock = asyncio.Lock()
         self.aborted = False
         self._abort_reason = "MCP tool execution failed"
@@ -138,6 +143,15 @@ class _MCPMiddleware(AgentMiddleware):
                 if effective_args is not raw
                 else request
             )
+            call_signature = json.dumps(
+                [name, effective_args],
+                ensure_ascii=False,
+                sort_keys=True,
+                default=str,
+            )
+            if call_signature in self._seen_calls:
+                raise _DuplicateToolCall("duplicate tool call")
+            self._seen_calls.add(call_signature)
             result: dict[str, object]
             if self.aborted:
                 result = {
@@ -384,6 +398,11 @@ class LangChainGuideAgent:
                 "maximum tool steps exceeded",
                 None,
             )
+        except _DuplicateToolCall:
+            # A completed tool trace is sufficient for the deterministic
+            # trusted-answer layer; stop the model from repeating the same
+            # external work until it reaches the global step limit.
+            return AgentResult("completed", None, tuple(traces), None, None)
         except _ModelFailure as error:
             return AgentResult("model_error", None, tuple(traces), str(error), None)
         except _ToolExecutionStopped as error:

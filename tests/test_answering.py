@@ -140,6 +140,25 @@ def test_route_not_found_survives_agent_step_limit() -> None:
     assert "步骤" not in answer.answer
 
 
+def test_low_score_knowledge_result_survives_agent_step_limit() -> None:
+    result = AgentResult(
+        "max_steps_exceeded",
+        None,
+        (_knowledge_result(0.42).tool_traces[0],),
+        "maximum tool steps exceeded",
+        None,
+    )
+
+    answer = build_trusted_answer(
+        result,
+        question="访客可以把车停在哪里？",
+    )
+
+    assert answer.status == "no_answer"
+    assert "没有找到足够可靠的答案" in answer.answer
+    assert "步骤" not in answer.answer
+
+
 def test_route_intent_prefers_unverified_location_over_person_profile() -> None:
     unverified = ToolTrace(
         tool_name="lookup_poi",
