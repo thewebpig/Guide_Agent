@@ -70,18 +70,41 @@ def resolve_config_path(path: str | Path | None = None) -> Path:
 def load_app_settings(path: str | Path | None = None) -> AppSettings:
     config_path = resolve_config_path(path)
     try:
-        raw = yaml.safe_load(config_path.read_text(encoding="utf-8"))
+        raw = _read_yaml(config_path)
         explicit_path = path is not None or bool(
             os.environ.get("GUIDE_CONFIG_PATH", "").strip()
         )
         if not explicit_path and LOCAL_CONFIG_PATH.is_file():
-            local_raw = yaml.safe_load(LOCAL_CONFIG_PATH.read_text(encoding="utf-8"))
+            local_raw = _read_yaml(LOCAL_CONFIG_PATH)
             raw = _merge_mappings(raw, local_raw)
         return AppSettings.model_validate(raw)
-    except (OSError, UnicodeError, yaml.YAMLError, ValidationError) as error:
+    except (OSError, UnicodeError) as error:
         raise AppConfigurationError(
-            f"failed to load product configuration {config_path}: {error}"
-        ) from error
+            f"failed to read product configuration {config_path}"
+        ) from None
+    except ValidationError as error:
+        details = error.errors(
+            include_url=False,
+            include_context=False,
+            include_input=False,
+        )
+        raise AppConfigurationError(
+            f"invalid product configuration fields: {details}"
+        ) from None
+
+
+def _read_yaml(path: Path) -> object:
+    try:
+        return yaml.safe_load(path.read_text(encoding="utf-8"))
+    except yaml.YAMLError as error:
+        mark = getattr(error, "problem_mark", None)
+        location = (
+            f" at line {mark.line + 1}, column {mark.column + 1}"
+            if mark is not None
+            else ""
+        )
+        # Do not include the parser excerpt: it may contain the API key.
+        raise AppConfigurationError(f"invalid YAML in {path}{location}") from None
 
 
 def _merge_mappings(base: object, override: object) -> object:

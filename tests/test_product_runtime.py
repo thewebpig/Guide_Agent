@@ -3,6 +3,7 @@ import asyncio
 import pytest
 from fastapi.testclient import TestClient
 
+import guide_agent.app_settings as app_settings_module
 from guide_agent.agent_contracts import AgentResult
 from guide_agent.answering import ChatService
 from guide_agent.capacity import CapacityExceeded, ClientRateLimiter, RequestGate
@@ -67,8 +68,13 @@ def test_http_rejects_unverified_or_non_spatial_current_location() -> None:
     assert response.json()["status"] == "invalid_location"
 
 
-def test_readiness_fails_closed_without_server_secret(monkeypatch) -> None:
+def test_readiness_fails_closed_without_server_secret(monkeypatch, tmp_path) -> None:
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    monkeypatch.setattr(
+        app_settings_module,
+        "LOCAL_CONFIG_PATH",
+        tmp_path / "missing-config.local.yaml",
+    )
     app = create_demo_app(service_factory=lambda: ChatService(ContextAgent()))
     with TestClient(app) as client:
         liveness = client.get("/health")
