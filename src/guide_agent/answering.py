@@ -74,6 +74,12 @@ def _safe_agent_failure(
         "empty_response": (
             "模型未返回可用内容，请换一种问法。"
         ),
+        "grounding_required": (
+            "本次没有取得可核实的工具结果，请稍后重试。"
+        ),
+        "unsafe_response": (
+            "本次没有取得可安全展示的回答，请稍后重试。"
+        ),
     }
     answer = messages.get(
         result.status,
@@ -94,6 +100,25 @@ def _tool_payload(
     """取出ToolRegistry统一外层结果里的data。"""
 
     return trace.result.get("data")
+
+
+def _safe_model_only_text(text: str) -> str | None:
+    """Remove reasoning wrappers and reject internal-control disclosures."""
+
+    if "</think>" in text:
+        text = text.rsplit("</think>", 1)[-1]
+    text = re.sub(r"</?think>", "", text, flags=re.IGNORECASE).strip()
+    internal_markers = (
+        "系统提示",
+        "POI ID",
+        "导航状态清单",
+        "location_unverified",
+        "not_navigable",
+        "restricted",
+    )
+    if not text or any(marker in text for marker in internal_markers):
+        return None
+    return text
 
 
 def _answer_from_route(
@@ -452,10 +477,18 @@ def build_trusted_answer(
                     response_id=result.response_id,
                 )
             )
-        return TrustedAnswer(
-            status="ok",
-            answer=result.answer,
-        )
+        safe_text = _safe_model_only_text(result.answer)
+        if safe_text is None:
+            return _safe_agent_failure(
+                AgentResult(
+                    status="unsafe_response",
+                    answer=None,
+                    tool_traces=(),
+                    error="unsafe_response",
+                    response_id=result.response_id,
+                )
+            )
+        return TrustedAnswer(status="ok", answer=safe_text)
 
     office_location_only = bool(
         question and _is_office_location_request(question, history)

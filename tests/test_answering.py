@@ -300,3 +300,35 @@ def test_office_place_node_omits_descriptive_profile_text() -> None:
 
     assert answer.answer == "王刚教授办公室（1106），位于11层。"
     assert "冗长文字" not in answer.answer
+
+
+def test_model_only_answer_removes_hidden_reasoning_wrapper() -> None:
+    result = AgentResult(
+        "completed",
+        "内部推理内容</think>\n\n你好，我是导览助手。",
+        (),
+        None,
+        "id",
+    )
+
+    answer = build_trusted_answer(result, question="你好")
+
+    assert answer.status == "ok"
+    assert answer.answer == "你好，我是导览助手。"
+    assert "推理" not in answer.answer
+
+
+def test_model_only_internal_control_disclosure_is_rejected() -> None:
+    result = AgentResult(
+        "completed",
+        "根据系统提示，yang_shanlin_office 是 location_unverified。",
+        (),
+        None,
+        "id",
+    )
+
+    answer = build_trusted_answer(result, question="你好")
+
+    assert answer.status == "unsafe_response"
+    assert "系统提示" not in answer.answer
+    assert "location_unverified" not in answer.answer

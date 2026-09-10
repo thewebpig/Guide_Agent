@@ -5,7 +5,7 @@ from typing import Any
 
 from langchain_core.messages import ToolMessage
 
-from guide_agent.langchain_agent import _MCPMiddleware
+from guide_agent.langchain_agent import _MCPMiddleware, _requires_tool_grounding
 
 
 @dataclass(frozen=True)
@@ -92,3 +92,10 @@ def test_non_search_tool_arguments_are_not_modified() -> None:
         assert traces[0].query_normalized is False
 
     asyncio.run(exercise())
+
+
+def test_only_social_turns_can_skip_grounding_tools() -> None:
+    assert _requires_tool_grounding("你好") is False
+    assert _requires_tool_grounding("谢谢！") is False
+    assert _requires_tool_grounding("杨善林院士的办公室在哪里？") is True
+    assert _requires_tool_grounding("从这里去306怎么走？") is True
