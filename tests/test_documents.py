@@ -19,9 +19,9 @@ from guide_agent.scene import load_scene
 
 
 # 从测试文件的位置推导项目根目录，不依赖pytest启动时的当前工作目录。
-# parents[1]是guide_agent项目根目录，真实demo场景位于其scenes/demo目录。
+# 旧的合成场景只作为测试夹具保留，不再放在正式产品场景目录中。
 PROJECT_ROOT = Path(__file__).parents[1]
-SCENE_DIR = PROJECT_ROOT / "scenes" / "demo"
+SCENE_DIR = PROJECT_ROOT / "tests" / "fixtures" / "demo_scene"
 SCENE_PATH = SCENE_DIR / "scene.json"
 
 

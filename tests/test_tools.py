@@ -26,8 +26,9 @@ from guide_agent.retrieval import (
 PROJECT_ROOT = Path(__file__).parents[1]
 DEMO_SCENE_PATH = (
     PROJECT_ROOT
-    / "scenes"
-    / "demo"
+    / "tests"
+    / "fixtures"
+    / "demo_scene"
     / "scene.json"
 )
 

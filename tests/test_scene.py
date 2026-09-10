@@ -18,12 +18,13 @@ from guide_agent.scene import (
 )
 
 
-# 用pathlib从测试文件自身的位置组装demo场景路径。
+# 用pathlib从测试文件自身的位置组装合成测试夹具路径。
 # 这样不依赖当前工作目录，CI与本地都能找到同一份资源文件。
 DEMO_SCENE_PATH = (
     Path(__file__).parents[1]
-    / "scenes"
-    / "demo"
+    / "tests"
+    / "fixtures"
+    / "demo_scene"
     / "scene.json"
 )
 

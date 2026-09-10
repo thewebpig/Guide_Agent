@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "guide-agent"
 version = "0.1.0"
-description = "A public, interview-ready LangChain + MCP guide agent."
+description = "A production-oriented LangChain + MCP visitor guide for the HFUT Management Center."
 requires-python = ">=3.11,<3.12"
 dependencies = [
     "faiss-cpu>=1.15,<2",

@@ -8,3 +8,8 @@ config.local.yaml
 dist
 build
 docs/*.png
+tests/**
+docs/**
+evals/**
+.env.example
+compose.yaml

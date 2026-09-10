@@ -13,11 +13,12 @@ from guide_agent.service import GuideService
 
 
 # 从测试文件自身位置推导场景路径，不依赖pytest从哪个工作目录启动。
-# parents[1]是项目根目录guide_agent，因此本地和CI都能定位同一份demo数据。
+# parents[1]是项目根目录guide_agent，因此本地和CI都能定位测试夹具。
 DEMO_SCENE_PATH = (
     Path(__file__).parents[1]
-    / "scenes"
-    / "demo"
+    / "tests"
+    / "fixtures"
+    / "demo_scene"
     / "scene.json"
 )
 

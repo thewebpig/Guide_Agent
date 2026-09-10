@@ -10,8 +10,9 @@ from guide_agent.scene import load_scene
 
 DEMO_SCENE_PATH = (
     Path(__file__).parents[1]
-    / "scenes"
-    / "demo"
+    / "tests"
+    / "fixtures"
+    / "demo_scene"
     / "scene.json"
 )
 

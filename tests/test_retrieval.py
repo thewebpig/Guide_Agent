@@ -1,8 +1,8 @@
 """Embedding与FAISS索引构建测试。
 
 单元测试使用FakeEmbedder固定向量，不依赖网络、模型缓存或模型效果；最后一条
-集成测试读取真实demo场景与文档，但仍注入FakeEmbedder，从而稳定验证完整建库
-流水线。真实模型另由scripts/build_index.py进行烟雾验证。
+集成测试读取合成测试夹具与文档，但仍注入FakeEmbedder，从而稳定验证完整建库
+流水线。真实检索效果另由scripts/evaluate_retrieval.py进行验收。
 """
 
 from collections.abc import Iterable
@@ -28,8 +28,9 @@ from guide_agent.scene import load_scene
 PROJECT_ROOT = Path(__file__).parents[1]
 DEMO_SCENE_PATH = (
     PROJECT_ROOT
-    / "scenes"
-    / "demo"
+    / "tests"
+    / "fixtures"
+    / "demo_scene"
     / "scene.json"
 )
 
