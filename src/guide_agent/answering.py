@@ -5,6 +5,7 @@
 """
 
 from dataclasses import dataclass
+import re
 
 import asyncio
 from typing import Protocol
@@ -337,9 +338,10 @@ def _answer_from_knowledge(
     # 证据块会保留 Markdown 标题，帮助向量检索识别语境；用户回答不应把标题
     # 和同一块中的无关段落整段倾倒出去。这里不做生成式改写，只从最高分证据
     # 中抽取首个正文段落，因此每个字仍可回溯到本次检索证据。
+    answer_text = _best_evidence_text([text for text, _ in evidence])
     return TrustedAnswer(
         status="ok",
-        answer=_concise_evidence_text(evidence[0][0]),
+        answer=answer_text,
         tools=tools,
         sources=tuple(
             source
@@ -365,7 +367,23 @@ def _concise_evidence_text(text: str) -> str:
     body = "\n".join(body_lines).strip()
     if not body:
         return text.strip()
-    return body.split("\n\n", maxsplit=1)[0].strip()
+    paragraph = body.split("\n\n", maxsplit=1)[0].strip()
+    return re.sub(r"\*\*(.+?)\*\*", r"\1", paragraph)
+
+
+def _best_evidence_text(texts: list[str]) -> str:
+    """Skip dangling labels/FAQ questions and select a substantive passage."""
+    candidates = [_concise_evidence_text(text) for text in texts]
+    for candidate in candidates:
+        cleaned = candidate.strip().lstrip("-* ")
+        if not cleaned:
+            continue
+        if cleaned.endswith(("：", ":")):
+            continue
+        if cleaned.startswith(("问：", "问题：")) or cleaned.endswith(("？", "?")):
+            continue
+        return candidate
+    return candidates[0] if candidates else ""
 
 
 def build_trusted_answer(

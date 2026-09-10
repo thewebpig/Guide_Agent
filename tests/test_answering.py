@@ -67,6 +67,24 @@ def test_trusted_answer_strips_heading_context_but_keeps_evidence_paragraph() ->
     assert "#" not in answer.answer
 
 
+def test_trusted_answer_skips_dangling_label_and_uses_next_evidence() -> None:
+    result = _knowledge_result(0.8)
+    first = result.tool_traces[0].result["data"][0]
+    first["text"] = "# 场景\n## 所在校区\n\n学校公开地址："
+    result.tool_traces[0].result["data"].append(
+        {
+            "source": "visitor_guide.md",
+            "chunk_id": "campus-answer",
+            "text": "# 场景\n## 所在校区\n\n合肥工业大学**屯溪路校区**。",
+            "score": 0.79,
+        }
+    )
+
+    answer = build_trusted_answer(result)
+
+    assert answer.answer == "合肥工业大学屯溪路校区。"
+
+
 def test_route_intent_not_found_cannot_be_overridden_by_later_rag_hit() -> None:
     result = AgentResult(
         status="completed",

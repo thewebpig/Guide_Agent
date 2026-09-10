@@ -55,9 +55,22 @@ function showEvidence(data) {
   panel.append(meta);
   if (data.sources.length) {
     panel.append(make("p", "eyebrow", "资料来源"));
+    const groupedSources = new Map();
     data.sources.forEach((source) => {
+      const current = groupedSources.get(source.source) || { count: 0, topScore: -1 };
+      current.count += 1;
+      current.topScore = Math.max(current.topScore, source.score);
+      groupedSources.set(source.source, current);
+    });
+    groupedSources.forEach((summary, sourceName) => {
       const item = make("div", "source");
-      item.append(make("b", "", source.source), make("div", "", `${source.chunk_id} · 检索分数 ${source.score.toFixed(2)}`));
+      const displayName = sourceName.endsWith("hfut_management_center_guide.md")
+        ? "工程管理与智能制造研究中心导览知识库"
+        : sourceName;
+      item.append(
+        make("b", "", displayName),
+        make("div", "", `命中 ${summary.count} 条依据 · 最高检索分数 ${summary.topScore.toFixed(2)}`),
+      );
       panel.append(item);
     });
   }
