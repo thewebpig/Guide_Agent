@@ -191,3 +191,112 @@ def test_person_profile_never_exposes_modeling_coordinates_as_office() -> None:
     assert answer.status == "location_unverified"
     assert "14层" not in answer.answer
     assert "没有可核实的具体办公室房间号" in answer.answer
+
+
+def test_office_location_question_returns_only_verified_office() -> None:
+    trace = ToolTrace(
+        tool_name="lookup_poi",
+        arguments={"poi_id": "wang_gang_profile"},
+        result={
+            "status": "ok",
+            "tool_name": "lookup_poi",
+            "data": {
+                "status": "ok",
+                "poi": {
+                    "name": "王刚教授",
+                    "description": "很长的教师履历和研究方向。",
+                    "position": {"floor": 11},
+                    "entity_type": "person",
+                    "navigation_status": "not_navigable",
+                    "public_info": {
+                        "office": "工程管理与智能制造研究中心1106室",
+                        "office_verification": "official_faculty_page",
+                    },
+                },
+            },
+            "error": None,
+        },
+        status="ok",
+    )
+
+    answer = build_trusted_answer(
+        AgentResult("completed", "ignored", (trace,), None, "id"),
+        question="王刚教授的办公室在哪里？",
+    )
+
+    assert answer.answer == "王刚教授的公开办公地点：工程管理与智能制造研究中心1106室。"
+    assert "履历" not in answer.answer
+    assert "研究方向" not in answer.answer
+
+
+def test_short_follow_up_inherits_previous_office_location_intent() -> None:
+    trace = ToolTrace(
+        tool_name="lookup_poi",
+        arguments={"poi_id": "ren_minglun_profile"},
+        result={
+            "status": "ok",
+            "tool_name": "lookup_poi",
+            "data": {
+                "status": "ok",
+                "poi": {
+                    "name": "任明仑教授",
+                    "description": "很长的教师履历和研究方向。",
+                    "position": {"floor": 11},
+                    "entity_type": "person",
+                    "navigation_status": "not_navigable",
+                    "public_info": {
+                        "office": "管理学院1108",
+                        "office_verification": "official_faculty_page",
+                    },
+                },
+            },
+            "error": None,
+        },
+        status="ok",
+    )
+    history = (
+        {"role": "user", "content": "王刚教授的办公室在哪里？"},
+        {"role": "assistant", "content": "王刚教授的公开办公地点是1106室。"},
+    )
+
+    answer = build_trusted_answer(
+        AgentResult("completed", "ignored", (trace,), None, "id"),
+        question="那任明仑教授呢？",
+        history=history,
+    )
+
+    assert answer.answer == "任明仑教授的公开办公地点：管理学院1108。"
+    assert "履历" not in answer.answer
+    assert "研究方向" not in answer.answer
+
+
+def test_office_place_node_omits_descriptive_profile_text() -> None:
+    trace = ToolTrace(
+        tool_name="lookup_poi",
+        arguments={"poi_id": "wang_gang_office_1106"},
+        result={
+            "status": "ok",
+            "tool_name": "lookup_poi",
+            "data": {
+                "status": "ok",
+                "poi": {
+                    "name": "王刚教授办公室（1106）",
+                    "description": "包含来源、用途和导览说明的冗长文字。",
+                    "position": {"floor": 11},
+                    "entity_type": "place",
+                    "navigation_status": "navigable",
+                    "public_info": {},
+                },
+            },
+            "error": None,
+        },
+        status="ok",
+    )
+
+    answer = build_trusted_answer(
+        AgentResult("completed", "ignored", (trace,), None, "id"),
+        question="王刚教授的办公室在哪里？",
+    )
+
+    assert answer.answer == "王刚教授办公室（1106），位于11层。"
+    assert "冗长文字" not in answer.answer

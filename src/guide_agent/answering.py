@@ -190,6 +190,8 @@ def _answer_from_route(
 def _answer_from_poi(
     trace: ToolTrace,
     tools: tuple[str, ...],
+    *,
+    office_location_only: bool = False,
 ) -> TrustedAnswer:
     payload = _tool_payload(trace)
 
@@ -249,6 +251,23 @@ def _answer_from_poi(
                 office_text = "目前公开资料中没有可核实的具体办公室房间号，请以学院最新信息或现场指引为准。"
             elif isinstance(office, str) and office.strip():
                 office_text = f"公开办公地点：{office.strip()}。"
+        if office_location_only:
+            if office_text:
+                return TrustedAnswer(
+                    status=(
+                        "location_unverified"
+                        if isinstance(public_info, dict)
+                        and public_info.get("office_verification") == "unverified"
+                        else "ok"
+                    ),
+                    answer=f"{name}的{office_text}",
+                    tools=tools,
+                )
+            return TrustedAnswer(
+                status="location_unverified",
+                answer=f"{name}目前没有可核实的公开办公地点，请以学院最新信息或现场指引为准。",
+                tools=tools,
+            )
         # Person profile coordinates are modeling aids, not verified rooms.
         return TrustedAnswer(
             status=(
@@ -266,6 +285,13 @@ def _answer_from_poi(
         floor = position.get("floor")
         if isinstance(floor, int) and not isinstance(floor, bool):
             floor_text = f"，位于{floor}层"
+
+    if office_location_only and "办公室" in name:
+        return TrustedAnswer(
+            status="ok",
+            answer=f"{name}{floor_text}。",
+            tools=tools,
+        )
 
     return TrustedAnswer(
         status="ok",
@@ -391,6 +417,7 @@ def build_trusted_answer(
     *,
     minimum_score: float = DEFAULT_DEMO_MINIMUM_SCORE,
     question: str | None = None,
+    history: tuple[dict[str, str], ...] = (),
 ) -> TrustedAnswer:
     """根据Agent轨迹生成最终回答，不接受模型自报的引用。"""
 
@@ -429,6 +456,10 @@ def build_trusted_answer(
             status="ok",
             answer=result.answer,
         )
+
+    office_location_only = bool(
+        question and _is_office_location_request(question, history)
+    )
 
     if question and _is_route_request(question):
         route_traces = [
@@ -472,7 +503,11 @@ def build_trusted_answer(
     if last_trace.tool_name == "plan_route":
         return _answer_from_route(last_trace, tools)
     if last_trace.tool_name == "lookup_poi":
-        return _answer_from_poi(last_trace, tools)
+        return _answer_from_poi(
+            last_trace,
+            tools,
+            office_location_only=office_location_only,
+        )
     if last_trace.tool_name == "search_knowledge":
         return _answer_from_knowledge(
             last_trace,
@@ -491,6 +526,36 @@ def build_trusted_answer(
 def _is_route_request(question: str) -> bool:
     markers = ("带我", "怎么走", "怎么去", "路线", "导航", "前往", "去往", "我要去", "我想去")
     return any(marker in question for marker in markers)
+
+
+def _is_office_location_request(
+    question: str,
+    history: tuple[dict[str, str], ...] = (),
+) -> bool:
+    """Recognize direct office questions and short contextual follow-ups."""
+
+    location_markers = ("哪里", "哪儿", "在哪", "位置", "地点")
+    if "办公室" in question and any(marker in question for marker in location_markers):
+        return True
+
+    stripped = question.strip()
+    is_follow_up = (
+        stripped.startswith(("那", "那么", "他", "她"))
+        or stripped.endswith(("呢", "呢？", "呢?"))
+    )
+    if not is_follow_up:
+        return False
+
+    for message in reversed(history):
+        if message.get("role") != "user":
+            continue
+        content = message.get("content", "")
+        return (
+            isinstance(content, str)
+            and "办公室" in content
+            and any(marker in content for marker in location_markers)
+        )
+    return False
 
 
 class ChatService:
@@ -580,6 +645,7 @@ class ChatService:
             result,
             minimum_score=self._minimum_score,
             question=question,
+            history=history,
         ), result
 
     async def aclose(self) -> None:
