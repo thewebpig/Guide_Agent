@@ -1,6 +1,7 @@
 "use strict";
 
 const SESSION_KEY = "hfut-guide-session";
+const MAX_QUESTION_LENGTH = 1000;
 const state = {
   config: null,
   pending: false,
@@ -28,6 +29,12 @@ function resetMessages() {
   state.hasMessages = false;
   empty($("messages"), "你好，我是中心导览助手", "可以询问场馆信息、教师公开资料、房间位置和仿真路线。");
   empty($("tracePanel"), "暂无回答依据", "提问后可在这里查看工具调用、资料来源和耗时。");
+}
+function updateCharacterCount() {
+  const length = $("question").value.length;
+  const counter = $("charCount");
+  counter.textContent = `${length}/${MAX_QUESTION_LENGTH}`;
+  counter.classList.toggle("over-limit", length > MAX_QUESTION_LENGTH);
 }
 function addMessage(role, content, error = false) {
   if (!state.hasMessages) { $("messages").replaceChildren(); state.hasMessages = true; }
@@ -89,8 +96,14 @@ function showEvidence(data) {
 async function send(question) {
   const cleaned = question.trim();
   if (state.pending || !cleaned) return;
+  if (cleaned.length > MAX_QUESTION_LENGTH) {
+    addMessage("assistant", `问题不能超过 ${MAX_QUESTION_LENGTH} 个字符，请精简后再发送。`, true);
+    $("question").focus();
+    return;
+  }
   addMessage("user", cleaned);
   $("question").value = "";
+  updateCharacterCount();
   busy(true);
   try {
     const response = await fetch("/chat", {
@@ -101,8 +114,13 @@ async function send(question) {
     const data = await response.json();
     state.sessionId = data.session_id || state.sessionId;
     localStorage.setItem(SESSION_KEY, state.sessionId);
-    addMessage("assistant", data.answer, !response.ok);
-    showEvidence(data);
+    const answer = data.answer || (
+      response.status === 422
+        ? "问题格式不正确或内容过长，请修改后重试。"
+        : "请求未能完成，请稍后重试。"
+    );
+    addMessage("assistant", answer, !response.ok);
+    if (data.sources && data.traces) showEvidence(data);
   } catch (_) {
     addMessage("assistant", "请求未能完成，请确认本地服务仍在运行。", true);
   } finally {
@@ -117,6 +135,7 @@ async function startNewConversation() {
     state.sessionId = newSessionId();
     localStorage.setItem(SESSION_KEY, state.sessionId);
     $("question").value = "";
+    updateCharacterCount();
     resetMessages();
   }
 }
@@ -153,4 +172,5 @@ async function init() {
 }
 $("chatForm").onsubmit = (event) => { event.preventDefault(); send($("question").value); };
 $("clearButton").onclick = startNewConversation;
+$("question").oninput = updateCharacterCount;
 init();

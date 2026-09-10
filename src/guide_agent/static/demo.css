@@ -35,6 +35,9 @@ body {
   justify-content: space-between;
   gap: 16px;
 }
+#charCount.over-limit {
+  color: var(--danger);
+}
 h1,
 h2,
 p {

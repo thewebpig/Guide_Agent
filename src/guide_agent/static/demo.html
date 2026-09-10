@@ -30,9 +30,9 @@
         <div id="presets" class="presets" aria-label="常见问题"></div>
         <form id="chatForm" class="composer">
           <label class="sr-only" for="question">输入问题</label>
-          <textarea id="question" maxlength="1000" rows="3" placeholder="例如：从主入口到第二学术报告厅怎么走？" disabled></textarea>
+          <textarea id="question" rows="3" aria-describedby="inputHint" placeholder="例如：从主入口到第二学术报告厅怎么走？" disabled></textarea>
           <div class="composer-footer">
-            <span>信息可能变化，请以学院最新通知和现场标识为准</span>
+            <span id="inputHint">信息可能变化，请以学院最新通知和现场标识为准 · <b id="charCount">0/1000</b></span>
             <button id="sendButton" type="submit" disabled>发送</button>
           </div>
         </form>
