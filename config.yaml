@@ -1,0 +1,21 @@
+model:
+  name: MiniCPM5-2B
+  base_url: https://developer.amd.com.cn/radeon/api/v1
+  api_format: chat_completions
+
+scene:
+  path: scenes/hfut_management_center/scene.json
+
+retrieval:
+  minimum_score: 0.50
+
+server:
+  host: 127.0.0.1
+  port: 8765
+  request_timeout_seconds: 15
+  model_concurrency: 6
+  queue_size: 14
+  requests_per_minute: 30
+
+session:
+  max_turns: 20

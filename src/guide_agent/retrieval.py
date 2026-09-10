@@ -7,7 +7,9 @@
 
 from collections.abc import Iterable
 from dataclasses import dataclass
+import os
 from pathlib import Path
+import re
 from typing import Protocol
 
 import faiss
@@ -61,6 +63,7 @@ class FastEmbedder:
         # 第一次实例化会下载模型，之后通常从本机缓存加载。
         self._model = TextEmbedding(
             model_name=model_name,
+            cache_dir=os.environ.get("FASTEMBED_CACHE_PATH", "").strip() or None,
         )
 
     def embed(
@@ -381,10 +384,11 @@ def search_knowledge(
         )
 
     # top_k大于索引规模时只搜索现有向量，避免FAISS用-1补齐不存在的位置。
-    effective_top_k = min(
-        top_k,
-        vector_count,
-    )
+    effective_top_k = min(top_k, vector_count)
+    # Retrieve a wider semantic candidate pool, then use a small lexical
+    # tie-breaker. This keeps exact room numbers and phrases such as “建筑面积”
+    # from being buried by many semantically similar venue paragraphs.
+    candidate_count = min(max(effective_top_k * 4, 20), vector_count)
 
     query_vector = _embed_query(
         knowledge_index.embedder,
@@ -397,11 +401,12 @@ def search_knowledge(
     scores, positions = (
         knowledge_index.index.search(
             query_vector,
-            effective_top_k,
+            candidate_count,
         )
     )
 
-    results: list[dict[str, object]] = []
+    ranked_results: list[tuple[float, dict[str, object]]] = []
+    query_terms = _character_bigrams(cleaned_query)
 
     # zip(strict=True)要求得分数和位置数完全相等，防止静默截断异常数据。
     for score, position in zip(
@@ -426,14 +431,29 @@ def search_knowledge(
             chunk_position
         ]
 
-        results.append(
-            {
-                "chunk_id": chunk.chunk_id,
-                "text": chunk.text,
-                "source": chunk.source,
-                # NumPy float32转换为Python float，便于JSON序列化。
-                "score": float(score),
-            }
+        semantic_score = float(score)
+        text_terms = _character_bigrams(chunk.text)
+        lexical_overlap = (
+            len(query_terms & text_terms) / len(query_terms) if query_terms else 0.0
+        )
+        ranked_results.append(
+            (
+                semantic_score + (0.25 * lexical_overlap),
+                {
+                    "chunk_id": chunk.chunk_id,
+                    "text": chunk.text,
+                    "source": chunk.source,
+                    # Keep the calibrated cosine score public; the lexical
+                    # value changes ordering only and is not a probability.
+                    "score": semantic_score,
+                },
+            )
         )
 
-    return results
+    ranked_results.sort(key=lambda item: item[0], reverse=True)
+    return [item[1] for item in ranked_results[:effective_top_k]]
+
+
+def _character_bigrams(text: str) -> set[str]:
+    normalized = "".join(re.findall(r"[\u4e00-\u9fffA-Za-z0-9]+", text)).casefold()
+    return {normalized[index : index + 2] for index in range(len(normalized) - 1)}

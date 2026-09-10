@@ -82,15 +82,24 @@ class GuideService:
 
         # 底层RouteResult用reason="unreachable"表达合法地点之间没有路径；
         # 服务层把它提升为明确status。其余正常路线（包括同起终点）都是ok。
-        status = (
-            result.reason
-            if result.reason in {"unreachable", "route_data_unavailable"}
-            else "ok"
-        )
+        business_failures = {
+            "unreachable",
+            "route_data_unavailable",
+            "destination_restricted",
+            "location_unverified",
+            "not_navigable",
+            "invalid_start_location",
+        }
+        status = result.reason if result.reason in business_failures else "ok"
 
-        return {
+        response = {
             "status": status,
             # model_dump先得到path、distance和reason字典；前面的**是字典展开语法，
             # 会把这些键值加入当前字典，与服务层新增的status组成完整结果。
             **result.model_dump(mode="json"),
         }
+        if self._scene.route_graph.distance_unit != "distance":
+            response["distance_unit"] = self._scene.route_graph.distance_unit
+            names = {poi.id: poi.name for poi in self._scene.pois}
+            response["path_names"] = [names[item] for item in result.path]
+        return response

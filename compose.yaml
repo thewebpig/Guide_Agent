@@ -1,0 +1,10 @@
+services:
+  guide-agent:
+    build: .
+    image: guide-agent:hfut-local
+    ports:
+      - "8765:8765"
+    environment:
+      OPENAI_API_KEY: ${OPENAI_API_KEY:?请先设置 OPENAI_API_KEY}
+      GUIDE_CONFIG_PATH: /app/config.yaml
+    restart: unless-stopped

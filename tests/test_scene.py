@@ -105,6 +105,15 @@ def test_scene_rejects_negative_route_distance() -> None:
         Scene.model_validate(raw_data)
 
 
+def test_scene_rejects_unknown_fields_instead_of_silently_discarding_them() -> None:
+    raw_data = load_json(DEMO_SCENE_PATH)
+    assert isinstance(raw_data, dict)
+    raw_data["pois"][0]["misspelled_navigation_status"] = "restricted"
+
+    with pytest.raises(ValidationError, match="Extra inputs are not permitted"):
+        Scene.model_validate(raw_data)
+
+
 def test_load_scene_reports_missing_file(tmp_path: Path) -> None:
     # tmp_path 是 pytest 提供的自动清理临时目录，避免污染仓库。
     missing_path = tmp_path / "missing_scene.json"

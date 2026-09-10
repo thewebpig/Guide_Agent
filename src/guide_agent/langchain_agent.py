@@ -288,14 +288,26 @@ class LangChainGuideAgent:
             owns_model=True,
         )
 
-    def _system_prompt(self) -> str:
-        return (
+    def _system_prompt(self, current_location: str | None = None) -> str:
+        prompt = (
             DEVELOPER_INSTRUCTIONS
             if self._scene_context is None
             else f"{DEVELOPER_INSTRUCTIONS}\n\n{self._scene_context}"
         )
+        if current_location:
+            prompt += (
+                f"\n\n本次会话由服务器确认的当前位置 POI ID 是 {current_location}。"
+                "用户使用‘这里’‘当前位置’等表达时以此为起点；不要自行改变该位置。"
+            )
+        return prompt
 
-    async def arun(self, user_message: str) -> AgentResult:
+    async def arun(
+        self,
+        user_message: str,
+        *,
+        history: tuple[dict[str, str], ...] = (),
+        current_location: str | None = None,
+    ) -> AgentResult:
         traces: list[ToolTrace] = []
         middleware = _MCPMiddleware(
             self._mcp_client,
@@ -309,11 +321,16 @@ class LangChainGuideAgent:
             graph = create_agent(
                 self._model,
                 tools,
-                system_prompt=self._system_prompt(),
+                system_prompt=self._system_prompt(current_location),
                 middleware=[middleware],
             )
             state = await graph.ainvoke(
-                {"messages": [{"role": "user", "content": user_message}]},
+                {
+                    "messages": [
+                        *history,
+                        {"role": "user", "content": user_message},
+                    ]
+                },
                 config={"recursion_limit": (self._max_steps * 4) + 12},
             )
         except asyncio.CancelledError:
@@ -372,11 +389,23 @@ class LangChainGuideAgent:
             response_id if isinstance(response_id, str) else None,
         )
 
-    def run(self, user_message: str) -> AgentResult:
+    def run(
+        self,
+        user_message: str,
+        *,
+        history: tuple[dict[str, str], ...] = (),
+        current_location: str | None = None,
+    ) -> AgentResult:
         try:
             asyncio.get_running_loop()
         except RuntimeError:
-            return asyncio.run(self.arun(user_message))
+            return asyncio.run(
+                self.arun(
+                    user_message,
+                    history=history,
+                    current_location=current_location,
+                )
+            )
         raise RuntimeError(
             "LangChainGuideAgent.run cannot be called from a running event loop; use arun"
         )

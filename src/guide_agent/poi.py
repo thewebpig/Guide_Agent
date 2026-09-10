@@ -14,7 +14,9 @@ Lesson 01 已实现字段校验、重复 ID 检查、精确查询与关键词搜
 # - 双反引号是文档工具常用的代码格式标记，不影响 Python 的执行。
 
 
-from pydantic import BaseModel, Field, field_validator
+from typing import Literal
+
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 # 这里从 pydantic 导入三个核心对象：
@@ -32,6 +34,8 @@ class Position(BaseModel):
     - 可用于与外部输入做安全的数据约束。
     """
 
+    model_config = ConfigDict(extra="forbid")
+
     # x、y 是必须提供的浮点坐标；floor 是整数楼层，未传入时默认位于第 1 层。
     x: float
     y: float
@@ -43,6 +47,8 @@ class POI(BaseModel):
 
     同样继承 `BaseModel`，这样每个 POI 在创建时可以自动进行字段校验。
     """
+
+    model_config = ConfigDict(extra="forbid")
 
     # - id 和 name 要求非空字符串（通常用于唯一标识和显示名）。
     # - description 可为空字符串默认值，给 POI 一个文本说明。
@@ -56,6 +62,15 @@ class POI(BaseModel):
     description: str = ""
     aliases: list[str] = Field(default_factory=list)
     tags: list[str] = Field(default_factory=list)
+    entity_type: Literal["place", "person", "knowledge"] = "place"
+    navigation_status: Literal[
+        "navigable",
+        "restricted",
+        "location_unverified",
+        "not_navigable",
+        "simulation_only",
+    ] = "navigable"
+    public_info: dict[str, object] = Field(default_factory=dict)
 
     @field_validator("id", "name")
     @classmethod

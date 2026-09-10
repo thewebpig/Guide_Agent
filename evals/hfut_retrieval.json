@@ -1,0 +1,13 @@
+[
+  {"question": "工程管理与智能制造研究中心位于哪个校区？", "expected": "屯溪路校区", "should_answer": true},
+  {"question": "研究中心的建筑面积是多少？", "expected": "32271.02", "should_answer": true},
+  {"question": "管理科学与工程有哪些研究方向？", "expected": "研究方向", "should_answer": true},
+  {"question": "第二学术报告厅通常用于什么活动？", "expected": "第二", "should_answer": true},
+  {"question": "任明仑教授办公室在哪里？", "expected": "1108", "should_answer": true},
+  {"question": "王刚教授主要研究什么？", "expected": "王刚", "should_answer": true},
+  {"question": "杨善林院士的办公室在哪里？", "expected": "未", "should_answer": true},
+  {"question": "这里能停车吗？", "expected": null, "should_answer": false},
+  {"question": "卫生间在哪里？", "expected": null, "should_answer": false},
+  {"question": "今天天气怎么样？", "expected": null, "should_answer": false}
+]
+

@@ -3,7 +3,13 @@
 import os
 from pathlib import Path
 
-from guide_agent.answering import ChatService, DEFAULT_DEMO_MINIMUM_SCORE
+from guide_agent.answering import ChatService
+from guide_agent.app_settings import (
+    AppConfigurationError,
+    AppSettings,
+    load_app_settings,
+    resolve_product_path,
+)
 from guide_agent.documents import DocumentLoadError
 from guide_agent.langchain_agent import LangChainGuideAgent
 from guide_agent.mcp_client import MCPToolClient
@@ -11,7 +17,9 @@ from guide_agent.model_settings import ModelConfigurationError, load_model_setti
 from guide_agent.scene import Scene, SceneLoadError, load_scene
 
 PROJECT_ROOT = Path(__file__).parents[2]
-DEFAULT_SCENE_PATH = PROJECT_ROOT / "scenes" / "demo" / "scene.json"
+DEFAULT_SCENE_PATH = (
+    PROJECT_ROOT / "scenes" / "hfut_management_center" / "scene.json"
+)
 
 
 class RuntimeBuildError(RuntimeError):
@@ -24,24 +32,38 @@ def build_default_chat_service(scene_path: str | Path | None = None) -> ChatServ
     LangChain owns the model loop; the three domain tools are loaded from the
     task-owned stdio MCP server, never directly from the web process.
     """
-    resolved = resolve_scene_path(scene_path)
     try:
-        settings = load_model_settings()
+        product = load_app_settings()
+        resolved = resolve_scene_path(scene_path, product)
+        settings = load_model_settings(defaults=product.model)
         scene = load_scene(resolved)
         agent = LangChainGuideAgent.from_settings(
             settings,
             MCPToolClient(resolved),
             scene_context=_build_scene_context(scene),
         )
-        return ChatService(agent, minimum_score=DEFAULT_DEMO_MINIMUM_SCORE)
-    except (ModelConfigurationError, SceneLoadError, DocumentLoadError, OSError) as error:
+        return ChatService(agent, minimum_score=product.retrieval.minimum_score)
+    except (
+        AppConfigurationError,
+        ModelConfigurationError,
+        SceneLoadError,
+        DocumentLoadError,
+        OSError,
+    ) as error:
         raise RuntimeBuildError("failed to initialize LangChain + MCP runtime") from error
 
 
-def resolve_scene_path(scene_path: str | Path | None = None) -> Path:
+def resolve_scene_path(
+    scene_path: str | Path | None = None,
+    settings: AppSettings | None = None,
+) -> Path:
     value = scene_path if scene_path is not None else os.environ.get("GUIDE_SCENE_PATH", "").strip()
-    candidate = Path(value) if value else DEFAULT_SCENE_PATH
-    return candidate if candidate.is_absolute() else PROJECT_ROOT / candidate
+    if value:
+        candidate = Path(value)
+        return candidate if candidate.is_absolute() else PROJECT_ROOT / candidate
+    if settings is not None:
+        return resolve_product_path(settings.scene.path)
+    return resolve_product_path(load_app_settings().scene.path)
 
 
 def _build_scene_context(scene: Scene) -> str:
@@ -51,14 +73,23 @@ def _build_scene_context(scene: Scene) -> str:
         + (f"（别名：{', '.join(poi.aliases)}）" if poi.aliases else "")
         for poi in scene.pois
     )
+    navigation_rules = "; ".join(
+        f"{poi.id}={poi.navigation_status}" for poi in scene.pois
+        if poi.navigation_status != "navigable"
+    )
+    examples = [poi.id for poi in scene.pois[:2]]
     return (
         f"场景系统提示：{scene.system_prompt}\n"
         f"POI 工具参数允许的纯 ID 清单：{poi_ids}\n"
         f"名称和别名映射（只用于理解用户问题，不能原样作为工具参数）：{poi_labels}\n"
         "工具参数硬性规则：lookup_poi 的 poi_id，以及 plan_route 的 start_id、end_id，"
-        "必须且只能填写上面清单中的一个精确纯 ID（例如 entrance、ai_lab）。"
+        f"必须且只能填写上面清单中的一个精确纯 ID（例如 {'、'.join(examples)}）。"
         "绝不能填写名称、别名、冒号后的说明、方括号注释，或把它们拼接进 ID。\n"
+        f"导航状态清单：{navigation_rules or '全部可导航'}。这些状态由路线工具强制执行；"
+        "restricted、location_unverified、not_navigable 不能规划为终点。\n"
+        "用户没有说明起点时，默认从 main_entrance 出发。\n"
         "知识检索规则：调用 search_knowledge 时，query 必须逐字复制用户完整原问题；"
         "不得添加场馆名称或其他上下文，不得摘要、改写或缩写为关键词。\n"
         "禁止猜测 POI ID、路线距离、开放时间和设施属性；不确定时调用工具或请求澄清。"
+        "路线权重和坐标是仿真数据，不得称为实测米数。"
     )

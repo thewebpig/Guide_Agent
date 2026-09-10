@@ -133,6 +133,19 @@ def _answer_from_route(
             error="invalid_location",
         )
 
+    navigation_failures = {
+        "destination_restricted": "该区域属于内部科研与办公区域，不能默认引导访客进入。如有访问授权，请按照现场工作人员指引前往。",
+        "location_unverified": "目前公开资料中没有可核实的具体办公室房间号，因此暂时无法规划路线。请以学院最新信息或现场指引为准。",
+        "not_navigable": "该信息是知识资料，不是可导航的实体地点，因此无法规划路线。",
+        "invalid_start_location": "起点不是经过确认的可导航地点，请重新选择当前位置。",
+    }
+    if business_status in navigation_failures:
+        return TrustedAnswer(
+            status=str(business_status),
+            answer=navigation_failures[str(business_status)],
+            tools=tools,
+        )
+
     path = payload.get("path")
     distance = payload.get("distance")
 
@@ -150,12 +163,24 @@ def _answer_from_route(
             error="tool_error",
         )
 
-    route_text = " -> ".join(path)
+    path_names = payload.get("path_names")
+    display_path = (
+        path_names
+        if isinstance(path_names, list)
+        and len(path_names) == len(path)
+        and all(isinstance(item, str) for item in path_names)
+        else path
+    )
+    route_text = " → ".join(display_path)
+    is_simulation = payload.get("distance_unit") == "simulation_weight"
+    measurement = "仿真路径权重" if is_simulation else "总距离"
+    disclaimer = "该路线用于系统演示，具体走法请以现场标识为准。" if is_simulation else ""
     return TrustedAnswer(
         status="ok",
         answer=(
             f"路线：{route_text}；"
-            f"总距离：{float(distance):g}。"
+            f"{measurement}：{float(distance):g}。"
+            f"{disclaimer}"
         ),
         tools=tools,
     )
@@ -430,6 +455,30 @@ class ChatService:
             result = await arun(question)
         else:
             result = await asyncio.to_thread(self._agent.run, question)
+        return build_trusted_answer(result, minimum_score=self._minimum_score), result
+
+    async def aanswer_with_context(
+        self,
+        question: str,
+        *,
+        history: tuple[dict[str, str], ...] = (),
+        current_location: str | None = None,
+    ) -> tuple[TrustedAnswer, AgentResult]:
+        """Execute with server-owned conversation and location context."""
+        arun = getattr(self._agent, "arun", None)
+        if callable(arun):
+            result = await arun(
+                question,
+                history=history,
+                current_location=current_location,
+            )
+        else:
+            result = await asyncio.to_thread(
+                self._agent.run,
+                question,
+                history=history,
+                current_location=current_location,
+            )
         return build_trusted_answer(result, minimum_score=self._minimum_score), result
 
     async def aclose(self) -> None:

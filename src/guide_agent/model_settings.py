@@ -4,6 +4,8 @@ import os
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 
+from guide_agent.app_settings import ProductModelConfig
+
 
 class ModelConfigurationError(ValueError):
     """The provider configuration is missing or invalid."""
@@ -19,7 +21,10 @@ class ModelSettings:
     api_format: str = "responses"
 
 
-def load_model_settings(environ: Mapping[str, str] | None = None) -> ModelSettings:
+def load_model_settings(
+    environ: Mapping[str, str] | None = None,
+    defaults: ProductModelConfig | None = None,
+) -> ModelSettings:
     """Load one OpenAI-compatible provider from environment variables.
 
     ``OPENAI_BASE_URL`` is the API root (for example
@@ -27,10 +32,14 @@ def load_model_settings(environ: Mapping[str, str] | None = None) -> ModelSettin
     """
 
     source = os.environ if environ is None else environ
-    model = source.get("OPENAI_MODEL", "").strip()
+    model = source.get("OPENAI_MODEL", defaults.name if defaults else "").strip()
     api_key = source.get("OPENAI_API_KEY", "").strip()
-    base_url = source.get("OPENAI_BASE_URL", "").strip() or None
-    api_format = source.get("OPENAI_API_FORMAT", "responses").strip() or "responses"
+    base_url = source.get(
+        "OPENAI_BASE_URL", defaults.base_url if defaults else ""
+    ).strip() or None
+    api_format = source.get(
+        "OPENAI_API_FORMAT", defaults.api_format if defaults else "responses"
+    ).strip() or (defaults.api_format if defaults else "responses")
     if not model:
         raise ModelConfigurationError("OPENAI_MODEL is required")
     if not api_key:

@@ -1,11 +1,11 @@
 :root {
-  --ink: #102a43;
+  --ink: #17324d;
   --muted: #627d98;
   --paper: #f6f2e9;
   --card: #fffdf8;
   --line: #d9e2ec;
-  --teal: #147d7e;
-  --teal-light: #e4f3f0;
+  --teal: #0b6b50;
+  --teal-light: #e3f3ed;
   --danger: #b23b3b;
 }
 * {
@@ -22,7 +22,7 @@ body {
     sans-serif;
 }
 .shell {
-  max-width: 1280px;
+  max-width: 980px;
   margin: auto;
   padding: 38px 24px 48px;
 }
@@ -46,6 +46,10 @@ h1 {
 }
 h2 {
   font-size: 19px;
+}
+.subtitle {
+  margin-top: 6px;
+  color: var(--muted);
 }
 .eyebrow {
   color: var(--teal);
@@ -82,6 +86,15 @@ h2 {
   border-bottom: 1px solid var(--line);
   padding: 13px 0;
   flex-wrap: wrap;
+}
+.notice {
+  margin: 24px 0 16px;
+  border-left: 4px solid #d79a26;
+  background: #fff7e6;
+  color: #785411;
+  padding: 11px 14px;
+  border-radius: 0 8px 8px 0;
+  font-size: 13px;
 }
 .context label {
   min-width: 0;
@@ -132,6 +145,22 @@ select {
   border-radius: 14px;
   padding: 22px;
   box-shadow: 0 8px 28px #102a4309;
+}
+.chat-card {
+  padding: 26px;
+}
+.location-control {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 20px;
+  color: var(--muted);
+  font-size: 13px;
+}
+.location-control select {
+  flex: 1;
+  width: auto;
+  margin: 0;
 }
 .messages {
   min-height: 270px;
@@ -239,6 +268,17 @@ select:disabled {
   flex-direction: column;
   gap: 12px;
 }
+.debug-card {
+  margin-top: 18px;
+  border-top: 1px solid var(--line);
+  padding-top: 14px;
+  color: var(--muted);
+}
+.debug-card > summary {
+  cursor: pointer;
+  font-weight: 700;
+  color: var(--teal);
+}
 .meta {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -340,5 +380,13 @@ pre {
   }
   .messages {
     min-height: 180px;
+  }
+  .location-control {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .location-control select {
+    width: 100%;
   }
 }

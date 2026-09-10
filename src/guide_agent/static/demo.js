@@ -1,172 +1,143 @@
 "use strict";
-const state = { config: null, pending: false },
-  $ = (id) => document.getElementById(id);
-function make(t, c, v) {
-  const n = document.createElement(t);
-  if (c) n.className = c;
-  if (v !== undefined) n.textContent = v;
-  return n;
+
+const SESSION_KEY = "hfut-guide-session";
+const state = {
+  config: null,
+  pending: false,
+  hasMessages: false,
+  sessionId: localStorage.getItem(SESSION_KEY) || newSessionId(),
+};
+const $ = (id) => document.getElementById(id);
+
+function newSessionId() { return crypto.randomUUID().replaceAll("-", ""); }
+localStorage.setItem(SESSION_KEY, state.sessionId);
+
+function make(tag, className, value) {
+  const node = document.createElement(tag);
+  if (className) node.className = className;
+  if (value !== undefined) node.textContent = value;
+  return node;
 }
-function empty(t, a, b) {
-  t.replaceChildren();
-  const n = make("div", "empty");
-  n.append(make("strong", "", a), make("p", "", b));
-  t.append(n);
+function empty(target, title, body) {
+  target.replaceChildren();
+  const node = make("div", "empty");
+  node.append(make("strong", "", title), make("p", "", body));
+  target.append(node);
 }
-function messages() {
-  empty(
-    $("messages"),
-    "从一个真实问题开始",
-    "模型经由 LangChain 调用 MCP 工具；过程将在右侧展示。",
-  );
+function resetMessages() {
+  state.hasMessages = false;
+  empty($("messages"), "你好，我是中心导览助手", "可以询问场馆信息、教师公开资料、房间位置和仿真路线。");
+  empty($("tracePanel"), "暂无回答依据", "提问后可在这里查看工具调用、资料来源和耗时。");
 }
-function trace(a) {
-  empty($("tracePanel"), a, "工具调用、引用和耗时只在服务端真实返回后显示。");
+function addMessage(role, content, error = false) {
+  if (!state.hasMessages) { $("messages").replaceChildren(); state.hasMessages = true; }
+  const node = make("article", `message ${role}${error ? " error" : ""}`);
+  node.append(make("div", "message-label", role === "user" ? "你" : "导览助手"), make("div", "", content));
+  $("messages").append(node);
+  node.scrollIntoView({ behavior: "smooth", block: "nearest" });
 }
-function msg(r, c, e = false) {
-  const n = make("article", `message ${r}${e ? " error" : ""}`);
-  n.append(
-    make("div", "message-label", r === "user" ? "你的问题" : "导览助手"),
-    make("div", "", c),
-  );
-  $("messages").append(n);
-}
-function busy(v) {
-  state.pending = v;
-  ["sendButton", "question", "clearButton"].forEach(
-    (id) => ($(id).disabled = v || !state.config),
-  );
-  $("sendButton").textContent = v ? "处理中…" : "发送问题";
-}
-function show(d) {
-  const p = $("tracePanel");
-  p.replaceChildren();
-  const m = make("div", "meta");
-  [
-    ["服务端总耗时", `${d.elapsed_ms} ms`],
-    ["请求 ID", d.request_id],
-    ["API 格式", d.api_format],
-  ].forEach(([k, v]) => {
-    const x = make("div", "metric");
-    x.append(make("span", "", k), make("b", "", v));
-    m.append(x);
+function busy(value) {
+  state.pending = value;
+  ["sendButton", "question", "clearButton", "currentLocation"].forEach((id) => {
+    $(id).disabled = value || !state.config;
   });
-  p.append(m);
-  if (d.sources.length) {
-    p.append(make("p", "eyebrow", "可信来源"));
-    d.sources.forEach((s) => {
-      const x = make("div", "source");
-      x.append(
-        make("b", "", s.source),
-        make(
-          "div",
-          "",
-          `${s.chunk_id} · 相似度 ${s.score.toFixed(2)}（非概率）`,
-        ),
-      );
-      p.append(x);
+  $("sendButton").textContent = value ? "正在回答…" : "发送";
+}
+function showEvidence(data) {
+  const panel = $("tracePanel");
+  panel.replaceChildren();
+  const meta = make("div", "meta");
+  [["回答耗时", `${data.elapsed_ms} ms`], ["请求编号", data.request_id]].forEach(([key, value]) => {
+    const item = make("div", "metric");
+    item.append(make("span", "", key), make("b", "", value));
+    meta.append(item);
+  });
+  panel.append(meta);
+  if (data.sources.length) {
+    panel.append(make("p", "eyebrow", "资料来源"));
+    data.sources.forEach((source) => {
+      const item = make("div", "source");
+      item.append(make("b", "", source.source), make("div", "", `${source.chunk_id} · 检索分数 ${source.score.toFixed(2)}`));
+      panel.append(item);
     });
   }
-  if (d.traces.length) {
-    p.append(make("p", "eyebrow", "MCP 工具调用"));
-    d.traces.forEach((t) => {
-      const x = make("details", "trace"),
-        s = make("summary", "", t.tool_name);
-      const callStatus = t.call_status ?? t.status;
-      const businessStatus = t.business_status;
-      s.append(make("span", "trace-status", `调用：${callStatus}`));
-      if (businessStatus !== null && businessStatus !== undefined) {
-        s.append(
-          make(
-            "span",
-            `trace-status ${businessStatus === "ok" ? "ok" : "business-failed"}`,
-            `业务：${businessStatus}`,
-          ),
-        );
-      }
-      x.append(
-        s,
-        t.retrieval
-          ? make(
-              "p",
-              "retrieval",
-              `检索观测：最高分 ${t.retrieval.top_score === null ? "无" : t.retrieval.top_score.toFixed(3)} · 阈值 ${t.retrieval.minimum_score.toFixed(2)} · ${t.retrieval.accepted ? "接受" : "拒绝"}${t.query_normalized ? " · 已纠正模型改写" : ""}`,
-            )
-          : document.createDocumentFragment(),
-        make("p", "", "参数"),
-        make("pre", "", JSON.stringify(t.arguments, null, 2)),
-        make("p", "", "结果"),
-        make("pre", "", JSON.stringify(t.result, null, 2)),
-      );
-      p.append(x);
+  if (data.traces.length) {
+    panel.append(make("p", "eyebrow", "工具记录"));
+    data.traces.forEach((trace) => {
+      const item = make("details", "trace");
+      const summary = make("summary", "", trace.tool_name);
+      summary.append(make("span", "trace-status", trace.business_status || trace.call_status));
+      item.append(summary, make("pre", "", JSON.stringify(trace.result, null, 2)));
+      panel.append(item);
     });
-  } else
-    p.append(
-      make(
-        "div",
-        "empty",
-        d.status === "ok" ? "本次回答没有调用工具。" : "未取得工具执行记录。",
-      ),
-    );
+  }
+  if (!data.sources.length && !data.traces.length) panel.append(make("div", "empty", "本次回答没有可展示的工具记录。"));
 }
-async function send(q) {
-  if (state.pending || !q.trim()) return;
-  $("messages").replaceChildren();
-  msg("user", q.trim());
-  trace("处理中");
+async function send(question) {
+  const cleaned = question.trim();
+  if (state.pending || !cleaned) return;
+  addMessage("user", cleaned);
+  $("question").value = "";
   busy(true);
   try {
-    const r = await fetch("/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ question: q.trim() }),
-      }),
-      d = await r.json();
-    msg("assistant", d.answer, !r.ok);
-    show(d);
+    const response = await fetch("/chat", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ question: cleaned, session_id: state.sessionId, current_location: $("currentLocation").value }),
+    });
+    const data = await response.json();
+    state.sessionId = data.session_id || state.sessionId;
+    localStorage.setItem(SESSION_KEY, state.sessionId);
+    addMessage("assistant", data.answer, !response.ok);
+    showEvidence(data);
   } catch (_) {
-    msg("assistant", "请求未能完成，请确认本地服务仍在运行。", true);
-    trace("请求未完成");
+    addMessage("assistant", "请求未能完成，请确认本地服务仍在运行。", true);
   } finally {
     busy(false);
+    $("question").focus();
+  }
+}
+async function startNewConversation() {
+  if (state.pending) return;
+  try { await fetch(`/sessions/${encodeURIComponent(state.sessionId)}`, { method: "DELETE" }); }
+  finally {
+    state.sessionId = newSessionId();
+    localStorage.setItem(SESSION_KEY, state.sessionId);
+    $("question").value = "";
+    resetMessages();
   }
 }
 async function init() {
   try {
-    const r = await fetch("/demo/config");
-    if (!r.ok) throw Error();
-    state.config = await r.json();
+    const response = await fetch("/demo/config");
+    if (!response.ok) throw Error();
+    state.config = await response.json();
     $("sceneTitle").textContent = state.config.scene.name;
-    $("format").textContent = `OpenAI-compatible · ${state.config.api_format}`;
-    const s = $("configStatus");
-    s.textContent = state.config.model_configured
-      ? "已配置 · 连接待验证"
-      : "未配置模型 · 运行 start_demo.ps1 -ConfigureModel";
-    s.className = `status ${state.config.model_configured ? "ready" : "warn"}`;
-    state.config.scene.preset_questions.forEach((q) => {
-      const b = make("button", "", q);
-      b.type = "button";
-      b.onclick = () => {
-        $("question").value = q;
-        $("question").focus();
-      };
-      $("presets").append(b);
+    $("routeNotice").textContent = state.config.scene.route_notice;
+    const status = $("configStatus");
+    status.textContent = state.config.model_configured ? "服务已就绪" : "等待部署人员配置模型密钥";
+    status.className = `status ${state.config.model_configured ? "ready" : "warn"}`;
+    const location = $("currentLocation");
+    state.config.scene.locations.forEach((poi) => {
+      const option = document.createElement("option");
+      option.value = poi.id;
+      option.textContent = `${poi.name}${poi.floor === null ? "" : ` · ${poi.floor}层`}`;
+      option.selected = poi.id === state.config.scene.default_location;
+      location.append(option);
     });
-    messages();
-    trace("等待请求");
+    state.config.scene.preset_questions.forEach((question) => {
+      const button = make("button", "", question);
+      button.type = "button";
+      button.onclick = () => send(question);
+      $("presets").append(button);
+    });
+    resetMessages();
     busy(false);
   } catch (_) {
-    $("configStatus").textContent = "无法读取演示配置";
+    $("configStatus").textContent = "服务配置读取失败";
     $("configStatus").className = "status warn";
   }
 }
-$("chatForm").onsubmit = (e) => {
-  e.preventDefault();
-  send($("question").value);
-};
-$("clearButton").onclick = () => {
-  $("question").value = "";
-  messages();
-  trace("等待请求");
-};
+$("chatForm").onsubmit = (event) => { event.preventDefault(); send($("question").value); };
+$("clearButton").onclick = startNewConversation;
 init();

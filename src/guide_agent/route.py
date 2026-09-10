@@ -39,7 +39,8 @@ def plan_route(scene: Scene, start_id: str, end_id: str) -> RouteResult:
     """
 
     # 收集场景中所有 POI 的 ID，后续用于“ID 存在性检查”和图初始化。
-    poi_ids = {poi.id for poi in scene.pois}
+    pois_by_id = {poi.id: poi for poi in scene.pois}
+    poi_ids = set(pois_by_id)
 
     if start_id not in poi_ids:
         # 这是“调用者给了一个 scene 外部不存在的起点 ID”时的业务错误，
@@ -49,6 +50,19 @@ def plan_route(scene: Scene, start_id: str, end_id: str) -> RouteResult:
     if end_id not in poi_ids:
         # 同上，终点不存在时抛同类输入错误。
         raise RouteInputError(f"unknown end POI: {end_id}")
+
+    blocked_reasons = {
+        "restricted": "destination_restricted",
+        "location_unverified": "location_unverified",
+        "not_navigable": "not_navigable",
+    }
+    end_status = pois_by_id[end_id].navigation_status
+    if end_status in blocked_reasons:
+        return RouteResult(reason=blocked_reasons[end_status])
+
+    start_status = pois_by_id[start_id].navigation_status
+    if start_status in {"location_unverified", "not_navigable"}:
+        return RouteResult(reason="invalid_start_location")
 
     if not scene.route_graph.data_available:
         return RouteResult(reason="route_data_unavailable")

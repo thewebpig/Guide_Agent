@@ -2,9 +2,9 @@
 
 from json import JSONDecodeError
 from pathlib import Path
-from typing import Self
+from typing import Literal, Self
 
-from pydantic import BaseModel, Field, ValidationError, model_validator
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 
 from guide_agent.config import load_json
 from guide_agent.poi import POI
@@ -16,6 +16,8 @@ class RouteEdge(BaseModel):
     继承 BaseModel 后，pydantic 会在构建对象时自动检查字段类型与约束，
     所以后续校验都基于“可信已清洗”的对象进行。
     """
+
+    model_config = ConfigDict(extra="forbid")
 
     # 每条边起点和终点的长度至少为1，可拒绝空字符串；跨节点有效性由Scene统一检查。
     from_id: str = Field(min_length=1)
@@ -31,15 +33,20 @@ class RouteGraph(BaseModel):
     edges 用 list[RouteEdge] 存边，默认工厂创建空列表，避免共享可变对象。
     """
 
+    model_config = ConfigDict(extra="forbid")
+
     directed: bool = False
     # false 表示尚无核实路网；区别于已建图中某对节点不连通。
     data_available: bool = True
+    distance_unit: Literal["distance", "simulation_weight"] = "distance"
     # default_factory=list 会在每个RouteGraph实例里各自创建 []，避免多个实例误共享同一列表。
     edges: list[RouteEdge] = Field(default_factory=list)
 
 
 class Scene(BaseModel):
     """单个场景的完整模型（ID、名称、POI、路网、提示词、文档引用）。"""
+
+    model_config = ConfigDict(extra="forbid")
 
     scene_id: str = Field(min_length=1)  # 场景唯一标识，不能为空
     name: str = Field(min_length=1)  # 场景名

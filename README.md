@@ -1,81 +1,121 @@
-# Guide Agent
+# 合肥工业大学工程管理与智能制造研究中心智能导览
 
-一个可直接演示的导览 Agent：FastAPI 页面/API → LangChain Agent → OpenAI-compatible 模型服务 → MCP stdio 工具服务。业务工具只有三个：知识检索、地点查询、路线规划。
+面向访客的本地导览产品：浏览器访问 FastAPI，LangChain Agent 统一调用
+MiniCPM5-2B，地点查询、知识检索和路线规划全部通过本地 MCP stdio 工具服务执行。
+浏览器不接触模型地址和 API Key。
 
-模型负责选择工具，检索、POI 和最短路线由受约束的 Python 工具执行，回答中的引用与路线来自真实工具轨迹。
+## 一期范围
+
+- 场景：合肥工业大学屯溪路校区工程管理与智能制造研究中心（管理学院）。
+- 数据：24 个地点/人物/知识实体、19 条仿真路线边，以及中心和教师公开资料。
+- 能力：场馆知识问答、POI 查询、教师办公室查询、Dijkstra 路线、连续对话、当前位置上下文。
+- 安全：内部区域、未核实办公室和非空间人物资料由路线代码强制拒绝，不依赖模型自觉。
+- 容量：模型并发 6、等待队列 14、单 IP 每分钟 30 次、请求目标超时 15 秒。
+
+路线坐标和距离均为算法验证使用的仿真数据，不是建筑测绘坐标或真实米数；实际使用应以现场标识为准。
 
 ## 架构
 
 ```text
-Browser / HTTP client
-        ↓
-FastAPI → LangChain create_agent → Responses 或 Chat Completions
-                                        ↓ tool call
-                              MCP client → MCP stdio server
-                                           ├─ search_knowledge
-                                           ├─ lookup_poi
-                                           └─ plan_route
+浏览器
+  ↓ HTTP
+FastAPI（会话、限流、超时、日志）
+  ↓
+LangChain Agent → MiniCPM5-2B（服务端配置）
+  ↓ tool call
+MCP stdio 子进程
+  ├─ search_knowledge → FastEmbed + FAISS
+  ├─ lookup_poi
+  └─ plan_route → 权限检查 + Dijkstra
 ```
 
-## 快速开始
+FastAPI 首次真正需要工具时启动同机 MCP 子进程。MCP 不开放公网端口，也不加载模型 API Key。
+
+## 配置
+
+非密钥配置统一位于 [`config.yaml`](config.yaml)：
+
+```yaml
+model:
+  name: MiniCPM5-2B
+  base_url: https://developer.amd.com.cn/radeon/api/v1
+  api_format: chat_completions
+
+scene:
+  path: scenes/hfut_management_center/scene.json
+
+retrieval:
+  minimum_score: 0.50
+```
+
+API Key 只从服务器环境变量读取：
+
+```powershell
+$env:OPENAI_API_KEY = "实际密钥"
+```
+
+不要把密钥写进 `config.yaml`、`.env.example` 或 Git。
+
+## 本地启动
 
 需要 Python 3.11 和 [uv](https://docs.astral.sh/uv/)。
 
 ```powershell
 uv sync --frozen
-.\scripts\start_demo.ps1 -ConfigureModel -ApiFormat chat_completions
+.\scripts\start_demo.ps1 -ConfigureSecret
 ```
 
-按提示输入模型、API 根地址和 Key，然后打开 `http://127.0.0.1:8765`。
+部署人员在终端输入一次 Key，然后游客直接访问：
 
-`OPENAI_BASE_URL` 填服务商的 API 根地址，例如 `https://provider.example/v1`，不要填 `/chat/completions` 或 `/responses`。若服务商支持 Responses API，把 `-ApiFormat` 改为 `responses`。
+```text
+http://127.0.0.1:8765
+```
 
-| 配置值 | 实际端点 |
-|---|---|
-| `responses` | `{OPENAI_BASE_URL}/responses` |
-| `chat_completions` | `{OPENAI_BASE_URL}/chat/completions` |
+页面不会要求游客填写模型配置。`GET /health` 可用于存活检查，Swagger UI 位于 `/docs`。
 
-也可手动配置环境变量：
+## Docker 本地运行
+
+安装 Docker Desktop 后：
 
 ```powershell
-$env:OPENAI_MODEL = "MiniCPM5-2B"
-$env:OPENAI_BASE_URL = "https://provider.example/v1"
-$env:OPENAI_API_KEY = "your-key"
-$env:OPENAI_API_FORMAT = "chat_completions"
-uv run uvicorn guide_agent.demo_api:app --host 127.0.0.1 --port 8765
+$env:OPENAI_API_KEY = "实际密钥"
+docker compose up --build
 ```
 
-## HTTP API
+镜像启动一个 Uvicorn/FastAPI 进程；FastAPI 再按需启动同一容器内的 MCP 子进程。
+镜像构建阶段预下载本地中文 Embedding 模型，避免首位游客触发下载。
 
-`GET /health` 只报告架构、配置状态和 API 格式，不返回密钥。
+## 会话行为
 
-`POST /chat`：
-
-```json
-{"question":"从主入口到人工智能实验室怎么走？"}
-```
-
-响应包含 `answer`、`sources`、`traces`、`api_format` 与 `elapsed_ms`。Swagger UI 位于 `/docs`，完整设计与演示话术见 [架构说明](docs/architecture.md) 和 [三分钟演示](docs/demo_3_minutes.md)。
-
-`search_knowledge` 按 Markdown 标题和段落建立语义块，并由程序强制使用用户的原始问题，避免模型扩写场馆名后造成虚高分。Trace 会显示最高检索分数、当前阈值和是否接受，但不会回传整段检索文档。默认阈值为 `0.50`，仅针对本仓库的演示场景校准；接入真实场馆资料前应使用代表性问题重新评测和设定阈值。
+- 浏览器自动创建随机会话 ID，服务端保存最近 20 轮上下文。
+- 会话没有主动时间过期；点击“新对话”会立即清除。
+- 本地版本使用进程内存，重启服务后会话清空。
+- 当前位置由页面明确选择，并由服务器校验为可导航 POI。
 
 ## 验证
 
 ```powershell
-uv run pytest
-uv run python -c "from guide_agent.demo_api import app; print(app.title)"
+uv run pytest -q
+uv run python scripts/evaluate_retrieval.py
 ```
 
-测试不调用大模型 API：覆盖场景解析、RAG、POI、Dijkstra 路线、工具 Schema、FastAPI、MCP stdio 工具发现，以及两种模型协议的真实 SDK 请求路径，不消耗 API 额度。首次运行 RAG/MCP 测试时，FastEmbed 可能需要下载 Embedding 模型；缓存后可离线执行。
+测试不调用大模型 API。测试集覆盖原有 LangChain/MCP 契约、真实场景解析、知识文档、
+23 条指定路线、限制区域拒绝、未核实办公室拒绝、配置、会话和 HTTP 接口。
+
+真实 MiniCPM5-2B 端到端测试必须由部署人员在本机注入有效 API Key 后单独执行，
+测试结果不得提交到仓库。
+
+内容更新、导航状态、健康检查和故障处理见 [`docs/local_operations.md`](docs/local_operations.md)。
 
 ## 目录
 
 ```text
-src/guide_agent/   Agent、MCP、业务工具和 FastAPI
-scenes/demo/       完全虚构的演示场景与知识文档
-tests/             100+ 个离线测试
-scripts/           PowerShell 启动脚本和 CLI
-docs/              架构、限制与演示说明
+config.yaml                         服务器非密钥配置
+scenes/hfut_management_center/      一期真实场景与知识文档
+src/guide_agent/                    Agent、MCP、业务层和 FastAPI
+tests/                              离线自动化测试
+Dockerfile / compose.yaml           本地容器运行
+docs/hfut_route_acceptance.md       用户提供的路线验收基准
 ```
 
-这个仓库不会提交 `.env`、密钥、私有求职材料、历史评测输出或模型调用记录。项目采用 [MIT License](LICENSE)。
+项目采用 [MIT License](LICENSE)。
