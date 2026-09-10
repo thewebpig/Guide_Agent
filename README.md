@@ -48,13 +48,29 @@ retrieval:
   minimum_score: 0.50
 ```
 
-API Key 只从服务器环境变量读取：
+API Key 支持三种配置方式，优先级为：启动参数/环境变量 > `config.local.yaml` > `config.yaml`。
+
+推荐复制私有配置模板：
+
+```powershell
+Copy-Item config.local.example.yaml config.local.yaml
+```
+
+然后只修改不会被 Git 提交的 `config.local.yaml`：
+
+```yaml
+model:
+  api_key: 实际密钥
+```
+
+也可以临时使用服务器环境变量：
 
 ```powershell
 $env:OPENAI_API_KEY = "实际密钥"
 ```
 
-不要把密钥写进 `config.yaml`、`.env.example` 或 Git。
+程序也允许在 `config.yaml` 的 `model.api_key` 中配置，但该文件受 Git 跟踪，
+不推荐这样做。不要把真实密钥提交到 GitHub。
 
 ## 本地启动
 
@@ -65,7 +81,14 @@ uv sync --frozen
 .\scripts\start_demo.ps1 -ConfigureSecret
 ```
 
-部署人员在终端输入一次 Key，然后游客直接访问：
+也可以通过启动参数覆盖配置文件：
+
+```powershell
+.\scripts\start_demo.ps1 -ApiKey "临时Key"
+```
+
+命令行参数可能进入终端历史，因此日常使用仍推荐 `config.local.yaml` 或交互式
+`-ConfigureSecret`。启动后游客直接访问：
 
 ```text
 http://127.0.0.1:8765

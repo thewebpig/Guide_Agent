@@ -4,10 +4,10 @@
 
 1. 安装 Python 3.11 和 uv。
 2. 执行 `uv sync --frozen`。
-3. 执行 `.\scripts\start_demo.ps1 -ConfigureSecret`，在终端输入 AMD API Key。
+3. 复制 `config.local.example.yaml` 为 `config.local.yaml` 并填写 AMD API Key，或执行 `.\scripts\start_demo.ps1 -ConfigureSecret` 交互输入。
 4. 浏览器访问 `http://127.0.0.1:8765`。
 
-模型地址、模型名、协议、场景路径、阈值和容量统一由 `config.yaml` 管理。游客页面没有模型配置入口。
+模型地址、模型名、协议、场景路径、阈值和容量统一由 `config.yaml` 管理。Key 可放在私有 `config.local.yaml`；`-ApiKey` 启动参数或 `OPENAI_API_KEY` 环境变量会覆盖文件值。游客页面没有模型配置入口。
 
 ## 更新场景内容
 

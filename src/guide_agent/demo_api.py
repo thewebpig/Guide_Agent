@@ -99,8 +99,10 @@ def _api_format(settings: AppSettings | None = None) -> str:
     return value if value in {"responses", "chat_completions"} else "invalid"
 
 
-def _model_configured() -> bool:
-    return bool(os.environ.get("OPENAI_API_KEY", "").strip())
+def _model_configured(settings: AppSettings | None = None) -> bool:
+    from_environment = bool(os.environ.get("OPENAI_API_KEY", "").strip())
+    from_file = bool(settings and settings.model.api_key)
+    return from_environment or from_file
 
 
 def _retrieval_observability(
@@ -282,12 +284,12 @@ def create_demo_app(
             "ok": True,
             "architecture": "langchain + mcp",
             "api_format": _api_format(product),
-            "model_configured": _model_configured(),
+            "model_configured": _model_configured(product),
         }
 
     @app.get("/ready")
     def ready(response: Response) -> dict[str, object]:
-        configured = _model_configured()
+        configured = _model_configured(product)
         if not configured:
             response.status_code = 503
         return {
@@ -301,7 +303,7 @@ def create_demo_app(
         return {
             "architecture": "langchain + mcp",
             "api_format": _api_format(product),
-            "model_configured": _model_configured(),
+            "model_configured": _model_configured(product),
             "scene": {
                 "name": scene.name,
                 "preset_questions": PRESETS,
@@ -408,7 +410,7 @@ def create_demo_app(
             response.status_code = 503
             message = (
                 "服务初始化失败，请检查场景和模型配置后重试。"
-                if _model_configured()
+                if _model_configured(product)
                 else "模型服务尚未配置。请由部署人员设置 OPENAI_API_KEY 后重启服务。"
             )
             payload = _error(

@@ -4,7 +4,7 @@
 __pycache__
 *.pyc
 .env
+config.local.yaml
 dist
 build
 docs/*.png
-

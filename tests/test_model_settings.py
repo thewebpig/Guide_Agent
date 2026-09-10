@@ -1,5 +1,8 @@
 import pytest
+from pydantic import SecretStr
 
+import guide_agent.app_settings as app_settings_module
+from guide_agent.app_settings import ProductModelConfig, load_app_settings
 from guide_agent.model_settings import ModelConfigurationError, load_model_settings
 
 
@@ -14,3 +17,30 @@ def test_loads_chat_completions_provider() -> None:
 def test_rejects_incomplete_or_unknown_config(env: dict[str, str]) -> None:
     with pytest.raises(ModelConfigurationError):
         load_model_settings(env)
+
+
+def test_start_environment_key_overrides_configuration_file_key() -> None:
+    defaults = ProductModelConfig(
+        name="MiniCPM5-2B",
+        base_url="https://developer.amd.com.cn/radeon/api/v1",
+        api_format="chat_completions",
+        api_key=SecretStr("file-key"),
+    )
+    from_file = load_model_settings({}, defaults)
+    overridden = load_model_settings({"OPENAI_API_KEY": "start-key"}, defaults)
+    assert from_file.api_key == "file-key"
+    assert overridden.api_key == "start-key"
+
+
+def test_private_local_yaml_fragment_overlays_tracked_configuration(
+    tmp_path, monkeypatch
+) -> None:
+    private_config = tmp_path / "config.local.yaml"
+    private_config.write_text("model:\n  api_key: private-file-key\n", encoding="utf-8")
+    monkeypatch.setattr(app_settings_module, "LOCAL_CONFIG_PATH", private_config)
+
+    settings = load_app_settings()
+
+    assert settings.model.name == "MiniCPM5-2B"
+    assert settings.model.api_key is not None
+    assert settings.model.api_key.get_secret_value() == "private-file-key"

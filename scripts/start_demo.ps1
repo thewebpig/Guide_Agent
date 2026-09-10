@@ -1,12 +1,15 @@
 param(
     [int]$Port = 8765,
+    [string]$ApiKey,
     [Alias("ConfigureModel")]
     [switch]$ConfigureSecret
 )
 
 $projectRoot = Split-Path -Parent $PSScriptRoot
 Set-Location -LiteralPath $projectRoot
-if ($ConfigureSecret -or [string]::IsNullOrWhiteSpace($env:OPENAI_API_KEY)) {
+if (-not [string]::IsNullOrWhiteSpace($ApiKey)) {
+    $env:OPENAI_API_KEY = $ApiKey.Trim()
+} elseif ($ConfigureSecret) {
     $secureKey = Read-Host "API Key（仅当前进程）" -AsSecureString
     $bstr = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($secureKey)
     try {

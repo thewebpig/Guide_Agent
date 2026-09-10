@@ -2,6 +2,7 @@ model:
   name: MiniCPM5-2B
   base_url: https://developer.amd.com.cn/radeon/api/v1
   api_format: chat_completions
+  # api_key 可配置，但推荐写入不会提交的 config.local.yaml。
 
 scene:
   path: scenes/hfut_management_center/scene.json

@@ -7,11 +7,12 @@ from pathlib import Path
 from typing import Literal
 
 import yaml
-from pydantic import BaseModel, ConfigDict, Field, ValidationError
+from pydantic import BaseModel, ConfigDict, Field, SecretStr, ValidationError
 
 
 PROJECT_ROOT = Path(__file__).parents[2]
 DEFAULT_CONFIG_PATH = PROJECT_ROOT / "config.yaml"
+LOCAL_CONFIG_PATH = PROJECT_ROOT / "config.local.yaml"
 
 
 class ProductModelConfig(BaseModel):
@@ -19,6 +20,7 @@ class ProductModelConfig(BaseModel):
     name: str = Field(min_length=1)
     base_url: str = Field(min_length=1)
     api_format: Literal["responses", "chat_completions"] = "chat_completions"
+    api_key: SecretStr | None = None
 
 
 class ProductSceneConfig(BaseModel):
@@ -69,11 +71,27 @@ def load_app_settings(path: str | Path | None = None) -> AppSettings:
     config_path = resolve_config_path(path)
     try:
         raw = yaml.safe_load(config_path.read_text(encoding="utf-8"))
+        explicit_path = path is not None or bool(
+            os.environ.get("GUIDE_CONFIG_PATH", "").strip()
+        )
+        if not explicit_path and LOCAL_CONFIG_PATH.is_file():
+            local_raw = yaml.safe_load(LOCAL_CONFIG_PATH.read_text(encoding="utf-8"))
+            raw = _merge_mappings(raw, local_raw)
         return AppSettings.model_validate(raw)
     except (OSError, UnicodeError, yaml.YAMLError, ValidationError) as error:
         raise AppConfigurationError(
             f"failed to load product configuration {config_path}: {error}"
         ) from error
+
+
+def _merge_mappings(base: object, override: object) -> object:
+    """Recursively overlay a private local YAML fragment on the base file."""
+    if not isinstance(base, dict) or not isinstance(override, dict):
+        return override
+    merged = dict(base)
+    for key, value in override.items():
+        merged[key] = _merge_mappings(merged.get(key), value)
+    return merged
 
 
 def resolve_product_path(value: str | Path) -> Path:

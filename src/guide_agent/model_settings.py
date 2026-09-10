@@ -33,7 +33,12 @@ def load_model_settings(
 
     source = os.environ if environ is None else environ
     model = source.get("OPENAI_MODEL", defaults.name if defaults else "").strip()
-    api_key = source.get("OPENAI_API_KEY", "").strip()
+    configured_key = (
+        defaults.api_key.get_secret_value()
+        if defaults is not None and defaults.api_key is not None
+        else ""
+    )
+    api_key = source.get("OPENAI_API_KEY", "").strip() or configured_key
     base_url = source.get(
         "OPENAI_BASE_URL", defaults.base_url if defaults else ""
     ).strip() or None
