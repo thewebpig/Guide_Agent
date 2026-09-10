@@ -330,8 +330,10 @@ class LangChainGuideAgent:
         )
         if current_location:
             prompt += (
-                f"\n\n本次会话由服务器确认的当前位置 POI ID 是 {current_location}。"
-                "用户使用‘这里’‘当前位置’等表达时以此为起点；不要自行改变该位置。"
+                f"\n\n页面当前选择的位置 POI ID 是 {current_location}。"
+                "用户使用‘这里’‘当前位置’或没有说明路线起点时，以此为默认起点。"
+                "如果用户在本轮明确说‘我在某地’‘从某地出发’或明确给出其他起点，"
+                "则本轮以用户明确说出的起点为准，不得让页面默认位置覆盖它。"
             )
         return prompt
 
